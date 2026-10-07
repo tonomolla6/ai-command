@@ -143,7 +143,9 @@ def install(source, prefix, auto=True):
         target = bin_dir / name
         if target.exists() or target.is_symlink():
             if own_launcher(target):
-                backups[name] = target.read_bytes()
+                previous=target.read_bytes()
+                if target.is_symlink() or previous!=content.encode():
+                    backups[name] = previous
             elif name in ('codex', 'claude'):
                 # Capture a native binary/symlink before replacing only its PATH
                 # entry. The original stays accessible under native/ below.
@@ -216,7 +218,12 @@ def install(source, prefix, auto=True):
                 target = bin_dir / name
                 if target.is_symlink():
                     target.unlink()  # Native target itself remains untouched.
-                atomic_write(target, content, 0o755)
+                # Stable launchers normally keep identical content across tags.
+                # Avoid one fsync per alias on hosts with busy disks, while still
+                # repairing modes and atomically replacing changed launchers.
+                if target.is_file() and target.read_bytes()==content.encode():
+                    if target.stat().st_mode & 0o777 != 0o755:target.chmod(0o755)
+                else:atomic_write(target, content, 0o755)
             point_current(base, release)
             # Adopt only our older per-user launchers. Their stable import path
             # now follows future global updates instead of an abandoned checkout.

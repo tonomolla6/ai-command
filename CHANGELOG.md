@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.2 — 2026-10-07
+
+- Conserva los lanzadores y atajos idénticos entre versiones para evitar escrituras y fsync innecesarios en servidores con disco ocupado. Los cambios reales mantienen backup y sustitución atómica.
+- Comprueba que los lanzadores iguales conservan su inode, repara su modo y mantiene backups de los lanzadores modificados.
+
 ## 1.1.1 — 2026-10-07
 
 - Solicita JSON explícitamente al consultar metadatos de GitHub/npm para actualizaciones de binarios independientes; mantiene las descargas de archivos en modo binario.

@@ -94,6 +94,25 @@ class InstallationTests(unittest.TestCase):
         with self.assertRaises(ManagerError):install(self.source,self.prefix)
         self.assertFalse((self.prefix/'lib/ai-command/current').exists())
 
+    def test_upgrade_keeps_identical_launcher_inodes_and_repairs_mode(self):
+        install(self.source,self.prefix)
+        bin_dir=self.prefix/'bin';original={p.name:(p.stat().st_ino,p.read_bytes()) for p in bin_dir.iterdir()}
+        (bin_dir/'ai').chmod(0o700)
+        (self.source/'VERSION').write_text('1.0.1')
+        install(self.source,self.prefix)
+        for p in bin_dir.iterdir():
+            self.assertEqual((p.stat().st_ino,p.read_bytes()),original[p.name])
+            self.assertEqual(p.stat().st_mode & 0o777,0o755)
+
+    def test_changed_managed_launcher_is_backed_up_and_replaced(self):
+        install(self.source,self.prefix)
+        launcher=self.prefix/'bin/ai';old=launcher.read_text()+'# older managed code\n';launcher.write_text(old)
+        (self.source/'VERSION').write_text('1.0.1')
+        install(self.source,self.prefix)
+        backups=list((self.prefix/'lib/ai-command/backups').glob('*/ai'))
+        self.assertEqual(len(backups),1);self.assertEqual(backups[0].read_text(),old)
+        self.assertNotIn('older managed code',launcher.read_text())
+
 
 class MigrationTests(unittest.TestCase):
     def test_idempotent_private_backup_and_preserves_unknown_fields(self):
