@@ -1,0 +1,271 @@
+#!/usr/bin/env python3
+"""Forward one tmux pane through control mode, leaving rendering to the terminal.
+
+Closing this client never sends exit, EOF or a signal to the persistent pane.
+"""
+import argparse
+import collections
+import fcntl
+import os
+import re
+import selectors
+import signal
+import struct
+import subprocess
+import sys
+import termios
+import tty
+import time
+from pathlib import Path
+
+
+OCTAL = re.compile(rb"\\([0-7]{3})")
+
+
+def decode_output(data):
+    return OCTAL.sub(lambda m: bytes([int(m[1], 8)]), data)
+
+
+class OutputFilter:
+    """tmux already answers DA/DSR: don't ask the outer terminal a second time."""
+    def __init__(self):
+        self.pending = b""
+
+    def feed(self, data):
+        data = self.pending + data
+        self.pending = b""
+        output = bytearray()
+        while data:
+            index = data.find(b"\x1b")
+            if index < 0:
+                output.extend(data)
+                break
+            output.extend(data[:index])
+            data = data[index:]
+            if len(data) == 1:
+                self.pending = data
+                break
+            if data[1:2] != b"[":
+                output.extend(data[:2])
+                data = data[2:]
+                continue
+            end = next((i for i in range(2, len(data)) if 0x40 <= data[i] <= 0x7e), None)
+            if end is None:
+                if len(data) > 4096:
+                    output.extend(data)
+                else:
+                    self.pending = data
+                break
+            sequence, data = data[:end + 1], data[end + 1:]
+            if not re.fullmatch(rb"\x1b\[(?:[?>=]?[0-9;]*c|\??[56]n)", sequence):
+                output.extend(sequence)
+        return bytes(output)
+
+
+def connection(session):
+    env = dict(os.environ)
+    env.pop("TMUX", None)
+    env.pop("TMUX_PANE", None)
+    panes = subprocess.check_output(
+        ["tmux", "list-panes", "-t", session + ":", "-F", "#{pane_id}"],
+        env=env, text=True).splitlines()
+    if len(panes) != 1:
+        raise ValueError("Native tabs require one pane; split terminals in VS Code")
+    pane = panes[0]
+    process = subprocess.Popen(
+        ["tmux", "-C", "attach-session", "-f", "no-output", "-t", session],
+        stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env)
+    queue = collections.deque([("attach", None)])
+    pending = bytearray()
+    block = None
+    block_lines = []
+    block_end = None
+    size = None
+    stopped = False
+    requested_close = False
+    initialized = False
+    output_filter = OutputFilter()
+    saved = termios.tcgetattr(0)
+    selector = selectors.DefaultSelector()
+    pending_commands = bytearray()
+    os.set_blocking(process.stdin.fileno(), False)
+
+    def send(command, kind="ignore"):
+        queue.append((kind, None))
+        if not pending_commands:
+            selector.register(process.stdin, selectors.EVENT_WRITE, "commands")
+        pending_commands.extend(command.encode("ascii") + b"\n")
+
+    def write(data):
+        while data:
+            written = os.write(1, data)
+            data = data[written:]
+
+    def resize():
+        nonlocal size
+        rows, cols, _, _ = struct.unpack("HHHH", fcntl.ioctl(0, termios.TIOCGWINSZ, b"\0" * 8))
+        desired = (max(2, rows), max(2, cols))
+        if desired == size:
+            return
+        size = desired
+        send(f"refresh-client -C {size[1]}x{size[0] + 1}")
+        send(f"resize-window -t {pane} -x {size[1]} -y {size[0]}")
+
+    def stop(*_):
+        nonlocal stopped, requested_close
+        requested_close = True
+        stopped = True
+
+    for sig in (signal.SIGHUP, signal.SIGTERM):
+        signal.signal(sig, stop)
+    signal.signal(signal.SIGWINCH, lambda *_: None)
+    try:
+        tty.setraw(0)
+        selector.register(0, selectors.EVENT_READ, "input")
+        selector.register(process.stdout, selectors.EVENT_READ, "control")
+        while not stopped and process.poll() is None:
+            for key, _ in selector.select(0.1):
+                if key.data == "commands":
+                    try:
+                        written = os.write(process.stdin.fileno(), pending_commands[:65536])
+                        del pending_commands[:written]
+                    except BlockingIOError:
+                        pass
+                    if not pending_commands:
+                        selector.unregister(process.stdin)
+                    continue
+                if key.data == "input":
+                    data = os.read(0, 1024)
+                    if not data:
+                        requested_close = True
+                        stopped = True
+                        break
+                    # Hex bytes cannot become tmux command syntax or shell commands.
+                    send(f"send-keys -t {pane} -H " + " ".join(f"{b:02x}" for b in data))
+                    continue
+                data = os.read(process.stdout.fileno(), 65536)
+                if not data:
+                    stopped = True
+                    break
+                pending.extend(data)
+                while b"\n" in pending:
+                    line, _, rest = pending.partition(b"\n")
+                    pending[:] = rest
+                    if block is None and re.fullmatch(rb"%begin [0-9]+ [0-9]+ [0-9]+", line):
+                        block = queue.popleft()[0] if queue else "ignore"
+                        block_end = line.split(b" ", 1)[1]
+                        block_lines = []
+                    elif line in (b"%end " + (block_end or b""), b"%error " + (block_end or b"")):
+                        failed = line.startswith(b"%error ")
+                        if failed:
+                            raise RuntimeError(b"\n".join(block_lines).decode(errors="replace"))
+                        if block == "attach":
+                            resize()
+                            send(f"capture-pane -p -e -J -S - -t {pane}", "snapshot")
+                            send(f"display-message -p -t {pane} '#{{cursor_x}} #{{cursor_y}} #{{cursor_flag}}'", "cursor")
+                            send("refresh-client -f '!no-output'", "ready")
+                        elif block == "snapshot":
+                            write(b"\x1b[0m\x1b[?1049l\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[r\x1b[H\x1b[2J\x1b[3J")
+                            write(b"\r\n".join(block_lines))
+                        elif block == "cursor":
+                            x, y, cursor = map(int, block_lines[0].split())
+                            write(f"\x1b[{y + 1};{x + 1}H".encode())
+                            write(b"\x1b[?2004h")
+                            write(b"\x1b[?25h" if cursor else b"\x1b[?25l")
+                        elif block == "ready":
+                            initialized = True
+                        block = None
+                    elif block is not None:
+                        block_lines.append(bytes(line))
+                    elif line.startswith(b"%output " + pane.encode() + b" "):
+                        write(output_filter.feed(decode_output(bytes(line).split(b" ", 2)[2])))
+                    elif line.startswith(b"%exit"):
+                        log_event(session, line.decode("ascii", errors="replace")[:160])
+                        stopped = True
+            if initialized:
+                resize()
+    finally:
+        selector.close()
+        # A vanished outer PTY must not prevent cleanup of our control client.
+        try:
+            termios.tcsetattr(0, termios.TCSANOW, saved)
+        except (OSError, termios.error):
+            requested_close = True
+        try:
+            process.stdin.close()
+        except OSError:
+            pass
+        try:
+            process.wait(timeout=2)
+        except subprocess.TimeoutExpired:
+            process.terminate()
+            process.wait(timeout=2)
+        try:
+            write(b"\x1b[0m\x1b[?25h\x1b[?2004l")
+        except OSError:
+            requested_close = True
+    return not requested_close
+
+
+def log_event(session, reason):
+    # Metadata only; never record terminal output or keystrokes.
+    try:
+        directory = Path(os.environ.get("XDG_STATE_HOME", str(Path.home() / ".local/state"))) / "ai-command-terminales"
+        directory.mkdir(mode=0o700, parents=True, exist_ok=True)
+        path = directory / "native-reconnect.log"
+        if path.exists() and path.stat().st_size > 262144:
+            path.replace(directory / "native-reconnect.previous.log")
+        with path.open("a") as stream:
+            os.chmod(path, 0o600)
+            stream.write(f"{time.strftime('%Y-%m-%dT%H:%M:%S%z')} pid={os.getpid()} session={session} {reason}\n")
+    except OSError:
+        pass
+
+
+def session_identity(session):
+    try:
+        return subprocess.check_output([
+            "tmux", "display-message", "-p", "-t", session + ":",
+            "#{pid}:#{session_id}:#{session_created}:#{pane_id}"
+        ], stderr=subprocess.DEVNULL, text=True, timeout=3).strip()
+    except (OSError, subprocess.SubprocessError):
+        return None
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("session")
+    args = parser.parse_args()
+    if not re.fullmatch(r"\$[0-9]+", args.session):
+        parser.error("Expected an exact tmux session ID")
+    original = session_identity(args.session)
+    if not original:
+        return
+    closing = False
+    def stop(*_):
+        nonlocal closing
+        closing = True
+    while not closing and session_identity(args.session) == original:
+        try:
+            if not connection(args.session):
+                break
+        except (OSError, RuntimeError, ValueError, subprocess.SubprocessError, termios.error) as error:
+            log_event(args.session, "transport_error=" + type(error).__name__)
+        # Retain the same VS Code PTY and reattach only to the exact original pane.
+        for sig in (signal.SIGHUP, signal.SIGTERM):
+            signal.signal(sig, stop)
+        try:
+            termios.tcgetattr(0)
+        except (OSError, termios.error):
+            break
+        if session_identity(args.session) != original:
+            break
+        log_event(args.session, "reconnecting")
+        for _ in range(10):
+            if closing:
+                break
+            time.sleep(0.1)
+
+
+if __name__ == "__main__":
+    main()

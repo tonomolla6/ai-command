@@ -1,0 +1,180 @@
+#!/usr/bin/env bash
+# Entrada interactiva a las sesiones tmux de la workstation local.
+set -euo pipefail
+DEFAULT_ROOT="${AI_COMMAND_WORKSPACE_ROOT:-$HOME}"
+[[ -d "$DEFAULT_ROOT" ]] || DEFAULT_ROOT="$HOME"
+
+usage() {
+  cat <<'HELP'
+terminales             Abrir una terminal tmux nueva e independiente.
+terminales nueva       Lo mismo; usado por + y Split de VS Code.
+terminales recuperar   Elegir una terminal que ya estaba abierta.
+terminales NOMBRE      Abrir o recuperar otra sesion con ese nombre.
+terminales lista       Ver las sesiones abiertas.
+terminales ayuda       Mostrar esta ayuda.
+
+Dentro de tmux, pulsa Ctrl+b, suelta ambas teclas y pulsa:
+  c        Nueva terminal          ,        Renombrar terminal
+  w        Elegir terminal         $        Renombrar sesion
+  s        Elegir sesion           d        Salir dejando todo abierto
+  v / h    Dividir en dos          z        Ampliar/restaurar panel
+  1..9     Cambiar de terminal     r        Recargar ~/.tmux.conf
+  ?        Ver todos los atajos
+
+En el perfil nativo de VS Code, el emulador gestiona seleccion y scroll.
+Clic derecho copia la seleccion; Ctrl+A selecciona el historial disponible.
+Los atajos Ctrl+b anteriores corresponden al cliente tmux clasico.
+
+Los nombres de sesion del comando admiten letras ASCII, numeros, _ y -.
+La maquina debe seguir encendida; apagarla o reiniciarla termina los procesos.
+Abre tus programas dentro de tmux: las terminales previas no se trasladan solas.
+HELP
+}
+
+if (( $# > 1 )); then
+  usage >&2
+  exit 2
+fi
+
+case "${1:-}" in
+  ayuda|-h|--help) usage; exit 0 ;;
+  lista|--list)
+    exec tmux list-sessions -F '#{session_name}: #{session_windows} ventanas, #{session_attached} conexiones'
+    ;;
+esac
+
+mode=${1:-nueva}
+if [[ "$mode" != --new && "$mode" != --pick && ! "$mode" =~ ^[a-zA-Z0-9_][a-zA-Z0-9_-]*$ ]]; then
+  printf 'Nombre no valido. Usa letras, numeros, _ o -.\n' >&2
+  exit 2
+fi
+
+if [[ ! -t 0 || ! -t 1 ]]; then
+  printf 'Ejecuta terminales desde una terminal interactiva. Para listar: terminales lista\n' >&2
+  exit 1
+fi
+
+new_terminal() {
+  local number=1 candidate result working_dir="${1:-$DEFAULT_ROOT}"
+  [[ -d "$working_dir" ]] || working_dir="$DEFAULT_ROOT"
+  while :; do
+    candidate="terminal-$number"
+    if ! tmux has-session -t "=$candidate" 2>/dev/null; then
+      if result=$(tmux new-session -d -P -F '#{session_id}' -s "$candidate" -n terminal -c "$working_dir" 2>&1); then
+        target=$result
+        return
+      fi
+      # Otra apertura simultanea puede haber reservado ese nombre.
+      if ! tmux has-session -t "=$candidate" 2>/dev/null; then
+        printf '%s\n' "$result" >&2
+        exit 1
+      fi
+    fi
+    ((number += 1))
+  done
+}
+
+recover_terminal() {
+  local choice index
+  local -a sessions
+  mapfile -t sessions < <(tmux list-sessions -f '#{==:#{@ai_command_interactive},1}' \
+    -F $'#{session_id}\t#{session_name} (#{session_attached} conexiones)' 2>/dev/null || true)
+  if (( ${#sessions[@]} == 0 )); then
+    new_terminal
+    return
+  fi
+  printf 'Terminales abiertas:\n  0) Nueva terminal\n'
+  for index in "${!sessions[@]}"; do
+    printf '  %s) %s\n' "$((index + 1))" "${sessions[$index]#*$'\t'}"
+  done
+  while :; do
+    read -r -p 'Elige un numero [0]: ' choice || exit 0
+    choice=${choice:-0}
+    if [[ "$choice" =~ ^[0-9]{1,5}$ ]]; then
+      choice=$((10#$choice))
+      if (( choice == 0 )); then
+        new_terminal
+        return
+      elif (( choice <= ${#sessions[@]} )); then
+        target=${sessions[$((choice - 1))]%%$'\t'*}
+        return
+      fi
+    fi
+    printf 'Elige uno de los numeros de la lista.\n' >&2
+  done
+}
+
+restore_vscode_terminal() {
+  local ticket=${mode#vscode-} claim resume_lock session_id created current
+  if [[ ! "$ticket" =~ ^[a-f0-9]{32}$ ]]; then
+    printf 'Identificador de recuperacion no valido.\n' >&2
+    exit 2
+  fi
+  resume_lock="ai-command-resume-$ticket"
+  # Consumir la recuperacion una sola vez: Split reutiliza los argumentos
+  # originales, pero debe crear otra sesion independiente.
+  timeout 5 tmux wait-for -L "$resume_lock"
+  trap 'tmux wait-for -U "$resume_lock" >/dev/null 2>&1 || true' EXIT
+  claim=$(tmux show-option -gqv "@ai_command_resume_$ticket")
+  tmux set-option -guq "@ai_command_resume_$ticket"
+  tmux wait-for -U "$resume_lock"
+  trap - EXIT
+  session_id=${claim%%:*}
+  created=${claim#*:}
+  if [[ "$session_id" =~ ^[$][0-9]+$ && "$created" =~ ^[0-9]+$ ]] && \
+      tmux has-session -t "$session_id" 2>/dev/null; then
+    current=$(tmux display-message -p -t "$session_id:" '#{session_created}')
+    if [[ "$current" == "$created" ]]; then
+      target=$session_id
+      return
+    fi
+  fi
+  new_terminal
+}
+
+persistent_vscode_terminal() {
+  local key=${mode#vsc-tab-} state_dir working_dir
+  if [[ ! "$key" =~ ^[a-f0-9]{32}$ ]]; then
+    printf 'Identificador de pestana no valido.\n' >&2
+    exit 2
+  fi
+  state_dir="${XDG_STATE_HOME:-$HOME/.local/state}/ai-command-terminales"
+  (umask 077; mkdir -p "$state_dir")
+  exec 9>"$state_dir/vscode-launch.lock"
+  flock -w 5 9
+  target=$(tmux list-sessions -f "#{==:#{@ai_command_vscode_key},$key}" \
+    -F '#{session_id}' 2>/dev/null || true)
+  if [[ -z "$target" ]]; then
+    working_dir=${AI_COMMAND_TERMINAL_CWD:-${PWD:-$DEFAULT_ROOT}}
+    new_terminal "$working_dir"
+    tmux set-option -t "$target" @ai_command_vscode_key "$key"
+  fi
+  flock -u 9
+  exec 9>&-
+}
+
+case "$mode" in
+  nueva|--new) new_terminal ;;
+  recuperar|--pick) recover_terminal ;;
+  vsc-tab-*) persistent_vscode_terminal ;;
+  vscode-*) restore_vscode_terminal ;;
+  *)
+    target="=$mode"
+    if ! tmux has-session -t "$target" 2>/dev/null; then
+      tmux new-session -d -s "$mode" -n terminal -c "$DEFAULT_ROOT"
+    fi
+    target=$(tmux display-message -p -t "=$mode:" '#{session_id}')
+    ;;
+esac
+
+tmux set-option -t "$target" @ai_command_interactive 1
+tmux set-option -t "$target" @ai_command_auto_restore 1
+native_mode=$(tmux show-option -t "$target" -qv @ai_command_native)
+if [[ "${native_mode:-${AI_COMMAND_TERMINALES_NATIVE:-0}}" == 1 ]]; then
+  tmux set-option -t "$target" @ai_command_native 1
+  exec python3 "${AI_COMMAND_TERMINALES_NATIVE_HELPER:-/usr/local/bin/terminales-native}" "$target"
+fi
+if [[ -n "${TMUX:-}" ]]; then
+  exec tmux switch-client -t "$target"
+fi
+exec tmux attach-session -t "$target"

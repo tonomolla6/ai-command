@@ -1,0 +1,140 @@
+{
+  "name": "agentes-terminales",
+  "displayName": "AI Command Agentes",
+  "version": "0.1.8",
+  "publisher": "ai-command",
+  "description": "Estado de los agentes de las terminales persistentes, de un vistazo.",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "main": "./extension.js",
+  "extensionKind": [
+    "workspace"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false
+    },
+    "virtualWorkspaces": {
+      "supported": false
+    }
+  },
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "aiCommandAgents",
+          "title": "Agentes",
+          "icon": "$(terminal)"
+        }
+      ]
+    },
+    "views": {
+      "aiCommandAgents": [
+        {
+          "id": "aiCommandAgents.list",
+          "name": "Agentes",
+          "icon": "$(terminal)"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "aiCommandAgents.openTerminal",
+        "title": "AI Command Agentes: abrir terminal"
+      },
+      {
+        "command": "aiCommandAgents.refresh",
+        "title": "AI Command Agentes: actualizar",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "aiCommandAgents.demo",
+        "title": "AI Command Agentes: probar los tres colores",
+        "icon": "$(beaker)"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "aiCommandAgents.refresh",
+          "when": "view == aiCommandAgents.list",
+          "group": "navigation"
+        },
+        {
+          "command": "aiCommandAgents.demo",
+          "when": "view == aiCommandAgents.list",
+          "group": "navigation"
+        }
+      ]
+    },
+    "colors": [
+      {
+        "id": "aiCommandAgents.working",
+        "description": "Agente trabajando.",
+        "defaults": {
+          "dark": "#FFFFFF",
+          "light": "#434343",
+          "highContrast": "#FFFFFF",
+          "highContrastLight": "#000000"
+        }
+      },
+      {
+        "id": "aiCommandAgents.done",
+        "description": "Agente terminado.",
+        "defaults": {
+          "dark": "#58A6FF",
+          "light": "#006BD6",
+          "highContrast": "#58A6FF",
+          "highContrastLight": "#006BD6"
+        }
+      },
+      {
+        "id": "aiCommandAgents.attention",
+        "description": "Agente necesita atención.",
+        "defaults": {
+          "dark": "#FF5353",
+          "light": "#C51226",
+          "highContrast": "#FF5353",
+          "highContrastLight": "#C51226"
+        }
+      },
+      {
+        "id": "aiCommandAgents.unknown",
+        "description": "Estado no confirmado.",
+        "defaults": {
+          "dark": "#8A8A8A",
+          "light": "#696969",
+          "highContrast": "#AAAAAA",
+          "highContrastLight": "#696969"
+        }
+      },
+      {
+        "id": "aiCommandAgents.off",
+        "description": "Sin agente activo.",
+        "defaults": {
+          "dark": "#8A8A8A",
+          "light": "#696969",
+          "highContrast": "#AAAAAA",
+          "highContrastLight": "#696969"
+        }
+      }
+    ]
+  },
+  "scripts": {
+    "test": "node --test test/*.test.js"
+  },
+  "files": [
+    "*.js",
+    "agents.svg",
+    "README.md"
+  ],
+  "__metadata": {
+    "installedTimestamp": 1790768055949,
+    "targetPlatform": "undefined",
+    "size": 42407
+  }
+}

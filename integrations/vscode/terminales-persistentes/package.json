@@ -1,0 +1,83 @@
+{
+  "name": "terminales-persistentes",
+  "displayName": "AI Command Terminales",
+  "description": "Terminales nativas de VS Code con procesos persistentes en tmux.",
+  "version": "0.4.2",
+  "publisher": "ai-command",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "main": "./extension.js",
+  "extensionKind": [
+    "workspace"
+  ],
+  "activationEvents": [
+    "onStartupFinished",
+    "onTerminalProfile:aiCommand.terminalesPersistentes"
+  ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false
+    },
+    "virtualWorkspaces": {
+      "supported": false
+    }
+  },
+  "contributes": {
+    "terminal": {
+      "profiles": [
+        {
+          "id": "aiCommand.terminalesPersistentes",
+          "title": "AI Command tmux persistente",
+          "icon": "terminal"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "aiCommandTerminalesPersistentes.restore",
+        "title": "AI Command: recuperar terminales abiertas"
+      }
+    ],
+    "configuration": {
+      "title": "AI Command Terminales",
+      "properties": {
+        "aiCommandTerminales.autoRestore": {
+          "type": "boolean",
+          "default": true,
+          "description": "Recuperar las sesiones tmux del workspace abierto, separadas por carpeta."
+        }
+      }
+    },
+    "keybindings": [
+      {
+        "key": "shift+enter",
+        "command": "workbench.action.terminal.sendSequence",
+        "args": {
+          "text": "\u001b[200~\r\u001b[201~"
+        },
+        "when": "terminalFocus && !terminalFindFocus"
+      },
+      {
+        "key": "ctrl+a",
+        "command": "workbench.action.terminal.selectAll",
+        "when": "terminalFocus && !terminalFindFocus"
+      }
+    ]
+  },
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "test:vscode": "xvfb-run -a node test/run-vscode-lifecycle.js"
+  },
+  "devDependencies": {
+    "@vscode/test-electron": "3.1.0"
+  },
+  "__metadata": {
+    "installedTimestamp": 1789455013437,
+    "targetPlatform": "undefined",
+    "size": 23603
+  }
+}

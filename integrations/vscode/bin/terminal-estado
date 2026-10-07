@@ -1,0 +1,53 @@
+#!/usr/bin/env python3
+"""Mark only the Codex belonging to the selected tmux pane; never send input."""
+import argparse
+import json
+import os
+from pathlib import Path
+import re
+import subprocess
+import time
+
+
+def codex_children(pid, depth=0):
+    if depth > 4:
+        return []
+    try:
+        proc = Path('/proc') / str(pid)
+        comm = (proc / 'comm').read_text().strip()
+        if comm == 'codex':
+            return [int(pid)]
+        if depth and comm not in ('bash', 'node', 'MainThread', 'sh', 'env') and not comm.startswith('python'):
+            return []
+        return [agent for child in (proc / 'task' / str(pid) / 'children').read_text().split()
+                for agent in codex_children(child, depth + 1)]
+    except (OSError, ValueError):
+        return []
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('estado', choices=['trabajando', 'listo', 'atencion', 'auto'])
+    parser.add_argument('--pane', default=os.environ.get('TMUX_PANE'))
+    args = parser.parse_args()
+    if not re.fullmatch(r'%[0-9]+', args.pane or ''):
+        parser.error('Ejecutar dentro de tmux o indicar --pane %ID exacto')
+    env = {**os.environ, 'TMUX': '', 'TMUX_PANE': ''}
+    def tmux(*values):
+        return subprocess.check_output(['tmux', *values], env=env, text=True, timeout=2).strip()
+    pane, pid = tmux('display-message', '-p', '-t', args.pane, '#{pane_id}|#{pane_pid}').split('|')
+    if pane != args.pane:
+        parser.error('No se encuentra el pane exacto')
+    if args.estado == 'auto':
+        tmux('set-option', '-pu', '-t', pane, '@ai_command_agent_mark')
+        return
+    agents = codex_children(pid)
+    if len(agents) != 1:
+        parser.error('El pane debe contener un único Codex principal')
+    state = {'trabajando': 'working', 'listo': 'done', 'atencion': 'attention'}[args.estado]
+    mark = json.dumps({'state': state, 'pid': agents[0], 'at': int(time.time() * 1000)}, separators=(',', ':'))
+    tmux('set-option', '-p', '-t', pane, '@ai_command_agent_mark', mark)
+
+
+if __name__ == '__main__':
+    main()
