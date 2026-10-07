@@ -20,6 +20,15 @@
 En el workspace del autor, usar su verificador de identidad antes de cualquier push.
 El workflow de CI sólo valida; publicar la release es una operación explícita del mantenedor.
 
+`python scripts/check_public_content.py` comprueba los archivos versionados y
+`--archive <paquete.tar.gz>` comprueba un paquete sin extraerlo. El constructor
+también aplica este control antes de generar el tar. Rechaza archivos privados,
+credenciales reconocibles, rutas de HOME privadas y correos que no sean ejemplos.
+La revisión humana sigue siendo necesaria, también para imágenes y texto libre.
+Para excluir nombres internos en tu entorno, define `AI_COMMAND_PRIVATE_TERMS`
+con un término por línea, fuera del repositorio. Los diagnósticos sólo indican
+archivo y categoría, nunca el contenido coincidente.
+
 ## Instalación
 
 ```text

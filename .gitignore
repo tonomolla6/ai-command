@@ -12,3 +12,8 @@ config.local.json
 *.sqlite*
 *.jsonl
 .ai/
+*.pem
+*.key
+*.bundle
+limits.json
+cookies.json

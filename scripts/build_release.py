@@ -11,12 +11,17 @@ ROOT=Path(__file__).resolve().parent.parent
 sys.path.insert(0,str(ROOT))
 from ai_manager import __version__
 from ai_manager.distribution import payload_files, version_tuple
+from check_public_content import audit_files
 
 p=argparse.ArgumentParser();p.add_argument('--out',required=True,type=Path);args=p.parse_args()
 version=(ROOT/'VERSION').read_text().strip();version_tuple('v'+version)
 if version!=__version__:raise SystemExit('VERSION y __version__ no coinciden')
 args.out.mkdir(parents=True,exist_ok=True)
 paths=payload_files(ROOT)+[ROOT/'install.py',ROOT/'install.sh']
+problems=audit_files(paths)
+if problems:
+ for name,issues in problems:print(name+': '+', '.join(issues),file=sys.stderr)
+ raise SystemExit('El paquete contiene datos no publicables; no se genera')
 target=args.out/('ai-command-v'+version+'.tar.gz')
 with tarfile.open(target,'w:gz',compresslevel=9) as tar:
  for path in sorted(paths):
