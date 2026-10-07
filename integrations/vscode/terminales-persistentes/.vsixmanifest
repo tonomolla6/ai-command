@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 	<PackageManifest Version="2.0.0" xmlns="http://schemas.microsoft.com/developer/vsx-schema/2011" xmlns:d="http://schemas.microsoft.com/developer/vsx-schema-design/2011">
 		<Metadata>
-			<Identity Language="en-US" Id="terminales-persistentes" Version="0.4.2" Publisher="ai-command" />
+			<Identity Language="en-US" Id="terminales-persistentes" Version="0.4.3" Publisher="ai-command" />
 			<DisplayName>AI Command Terminales</DisplayName>
 			<Description xml:space="preserve">Terminales nativas de VS Code con procesos persistentes en tmux.</Description>
 			<Tags>keybindings</Tags>

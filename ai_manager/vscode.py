@@ -41,5 +41,5 @@ def install_extensions(manager):
     settings['terminal.integrated.defaultProfile.linux']='AI Command tmux persistente'
     atomic_write(registry,json.dumps(entries,indent=2)+'\n',0o644)
     atomic_write(machine,json.dumps(settings,indent=2)+'\n',0o600)
-    print('AI Command Agentes 0.1.8 y AI Command Terminales 0.4.2 instalados para este usuario.')
+    print('AI Command Agentes 0.1.9 y AI Command Terminales 0.4.3 instalados para este usuario.')
     print('Recarga la ventana de VS Code Remote SSH para activarlos; tmux debe estar instalado.')
