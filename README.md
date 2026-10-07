@@ -204,6 +204,14 @@ reciben el flag. Usa `--agy-danger off` o `--opencode-danger off` para desactiva
 
 ## Actualizaciones y servidores
 
+Al ejecutar un comando interactivo, el gestor comprueba si hay una release/tag
+estable más reciente y pregunta si deseas actualizar. Si aceptas, verifica el
+paquete, actualiza y relanza **el mismo comando con sus argumentos y directorio**.
+La comprobación tiene un timeout de 2 segundos y una caché de 15 minutos; sin red
+continúa trabajando. Las ejecuciones no interactivas, JSON, dry-run y consultas
+explícitamente de caché no muestran preguntas. Un tag sin paquete/checksum publicado
+no se ofrece como actualización. En instalaciones globales puede pedir sudo.
+
 ```bash
 ai --version
 ai update --check           # ver la última release estable publicada

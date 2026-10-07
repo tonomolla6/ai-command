@@ -20,6 +20,13 @@
 En el workspace del autor, usar su verificador de identidad antes de cualquier push.
 El workflow de CI sólo valida; publicar la release es una operación explícita del mantenedor.
 
+Los comandos interactivos ofrecen una nueva release estable con una comprobación
+limitada a 2 segundos y caché privada de 15 minutos. Aceptar instala el tag exacto
+ofrecido y hace exec del lanzador estable con el argv original, conservando cwd y
+entorno. El proceso nuevo omite sólo la primera comprobación para evitar bucles.
+Rechazar aplaza el aviso 15 minutos; un fallo de red/actualización permite continuar.
+No se pregunta en pipelines, JSON, dry-run, modo cached ni en `ai update`.
+
 `python scripts/check_public_content.py` comprueba los archivos versionados y
 `--archive <paquete.tar.gz>` comprueba un paquete sin extraerlo. El constructor
 también aplica este control antes de generar el tar. Rechaza archivos privados,

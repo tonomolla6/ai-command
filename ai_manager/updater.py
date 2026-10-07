@@ -18,11 +18,11 @@ API = 'https://api.github.com/repos/' + REPO
 MAX_ARCHIVE = 32 * 1024 * 1024
 
 
-def download(url, limit):
+def download(url, limit, timeout=30):
     request = urllib.request.Request(url, headers={'User-Agent': 'ai-command-updater',
         'Accept': 'application/vnd.github+json' if url.startswith(API) else 'application/octet-stream'})
     try:
-        with urllib.request.urlopen(request, timeout=30) as response:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
             data = response.read(limit + 1)
     except (urllib.error.URLError, TimeoutError):
         raise ManagerError('No se pudo descargar la release de GitHub; instalación actual conservada') from None
@@ -31,10 +31,10 @@ def download(url, limit):
     return data
 
 
-def release_info(tag=None):
+def release_info(tag=None, timeout=30):
     if tag:
         version_tuple(tag)
-    data = json.loads(download(API + ('/releases/tags/' + tag if tag else '/releases/latest'), 1024 * 1024))
+    data = json.loads(download(API + ('/releases/tags/' + tag if tag else '/releases/latest'), 1024 * 1024, timeout=timeout))
     version_tuple(data['tag_name'])
     if data.get('draft') or data.get('prerelease'):
         raise ManagerError('Sólo se admiten releases estables publicadas')

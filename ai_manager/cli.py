@@ -403,11 +403,14 @@ def parser():
 
 def main(argv=None):
     os.umask(0o077)
-    p=parser();args,extra=p.parse_known_args(argv)
+    original_argv=list(sys.argv[1:] if argv is None else argv)
+    p=parser();args,extra=p.parse_known_args(original_argv)
     if extra and args.command not in ('codex','claude','agy','opencode','resume','auto'):p.error('Argumentos desconocidos: '+str(extra))
     args.extra=extra
     manager=Manager()
     try:
+        from .update_notice import maybe_update
+        maybe_update(manager,original_argv,args)
         if args.command=='update':
             from .updater import update
             return update(args)
