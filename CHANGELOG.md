@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- El mantenimiento nativo de Codex instala también `codex-code-mode-host` de la misma release y arquitectura, con checksums oficiales y validación previa de ambos ejecutables.
+- Los backups y la recuperación incluyen el auxiliar; un fallo al sustituir el CLI restaura la pareja anterior. El mantenimiento se aplaza si cualquiera de los dos procesos está activo.
+
 ## 1.2.0 — 2026-10-07
 
 - Prioridad `low` por cuenta: la rotación usa antes las cuentas normales con cuota verificada y mantiene el orden por reset dentro de cada prioridad. Se restaura con `normal` y aparece en cuentas y uso.
