@@ -1,3 +1,4 @@
+import contextlib
 import hashlib
 import json
 from pathlib import Path
@@ -46,7 +47,7 @@ class LocalHistoryTests(unittest.TestCase):
     def test_read_only_metadata_counts_components_once_without_caching_private_text(self):
         with tempfile.TemporaryDirectory() as tmp:
             path=Path(tmp)/'history.db'
-            with sqlite3.connect(path) as conn:
+            with contextlib.closing(sqlite3.connect(path)) as conn, conn:
                 conn.execute('create table message (id text,data text,time_created integer)')
                 data={'role':'assistant','providerID':'opencode','modelID':'model-a',
                       'time':{'created':(self.now-100)*1000,'completed':(self.now-50)*1000},
@@ -76,7 +77,7 @@ class LocalHistoryTests(unittest.TestCase):
     def test_unknown_database_schema_is_reported_without_mutation(self):
         with tempfile.TemporaryDirectory() as tmp:
             path=Path(tmp)/'unknown.db'
-            with sqlite3.connect(path) as conn:conn.execute('create table changed_schema (text text)')
+            with contextlib.closing(sqlite3.connect(path)) as conn, conn:conn.execute('create table changed_schema (text text)')
             before=path.read_bytes()
             with self.assertRaises(ManagerError):read_history(path,self.now)
             self.assertEqual(path.read_bytes(),before)

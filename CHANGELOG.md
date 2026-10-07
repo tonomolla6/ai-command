@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.2 — 2026-10-07
+
+- Suite de pruebas portable sin Codex/Claude instalados y cierre explícito de fixtures SQLite en Python 3.13.
+- CI valida Python 3.11, 3.12 y 3.13 sin duplicar ejecuciones al publicar un tag.
+
 ## 1.0.1 — 2026-10-07
 
 - La migración de una instalación anterior conserva sus ejecutables nativos aunque no estén directamente en PATH.

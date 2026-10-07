@@ -43,7 +43,7 @@ en `PATH`. `git` permite instalar desde el repositorio; `fzf` mejora el menú y
 estándar de Python y funciona en x86_64 y ARM64.
 
 ```bash
-git clone --branch v1.0.1 --depth 1 https://github.com/tonomolla6/ai-command.git
+git clone --branch v1.0.2 --depth 1 https://github.com/tonomolla6/ai-command.git
 cd ai-command
 ./install.sh
 export PATH="$HOME/.local/bin:$PATH"  # instalación sin sudo

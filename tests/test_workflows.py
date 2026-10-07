@@ -92,7 +92,7 @@ class ProfileWorkflowTests(unittest.TestCase):
     def test_launch_same_cwd_same_home_and_explicit_provider_account(self):
         args=argparse.Namespace(provider='codex',account='1',extra=[],dry_run=True)
         output=io.StringIO()
-        with contextlib.redirect_stdout(output):self.assertEqual(launch(self.m,args),0)
+        with patch('ai_manager.cli.executable',return_value='/fixture/codex'),contextlib.redirect_stdout(output):self.assertEqual(launch(self.m,args),0)
         data=json.loads(output.getvalue())
         self.assertEqual(data['cwd'],str(Path.cwd()))
         self.assertEqual(data['home'],str(self.home/'.codex'))
