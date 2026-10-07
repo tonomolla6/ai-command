@@ -49,14 +49,16 @@ def select_account(manager, provider, entries):
         score = quota_score(entry)
         if score is not None:
             expiry = quota_expiry(entry)
-            candidates.append((expiry if expiry is not None else math.inf, -score, int(account['account']), account))
+            priority = 1 if account.get('priority') == 'low' else 0
+            candidates.append((priority, expiry if expiry is not None else math.inf,
+                               -score, int(account['account']), account))
     if not candidates:
         raise ManagerError(f"No hay cuentas {provider} con identidad y cuota disponibles verificadas. "
                            f"Consulta ai usage; puedes elegir explícitamente una cuenta con ai {provider} <número>.")
-    # Spend the allowance nearest reset first; missing dates sort after known
-    # dates, then headroom and stable account number resolve ties.
-    candidates.sort(key=lambda pair: pair[:3])
-    return candidates[0][3]
+    # Low priority is a last resort. Within each tier, use the nearest reset,
+    # then headroom and account number; all tiers require verified quota.
+    candidates.sort(key=lambda pair: pair[:4])
+    return candidates[0][4]
 
 
 def refresh_accounts(manager, provider):

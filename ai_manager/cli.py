@@ -20,7 +20,7 @@ from .handoff import handoff, handoff_prompt
 from .providers import AUTO_WRAPPER_MARKER, auth_status, executable, version
 from .sessions import list_sessions, prepare_resume, session_lock_name
 from .setup import install_commands, install_auto_commands, setup
-from .registry import add_account, rename_account, save_registry, sync_identity, set_codex_policy, fixed_model_arguments
+from .registry import add_account, rename_account, save_registry, sync_identity, set_codex_policy, fixed_model_arguments, set_priority
 from .ui import colored, render_usage, activity_lines, compact_tokens
 from .single_tools import SINGLE_TOOLS, current_tools, launch_tool, models, list_tool_sessions, local_activity
 from .claude_setup import repair_onboarding
@@ -89,13 +89,15 @@ def accounts(manager,args):
     rows=[]
     for a,(ready,status) in zip(selected,statuses):
         rows.append({"provider":a["provider"],"account":a["account"],"email":a.get('email'),"home":a["home"],"configured":ready,"status":status,
-                     "fixed_model":a.get('fixed_model'),"automatic":a.get('automatic',True),"plan_label":a.get('plan_label')})
+                     "fixed_model":a.get('fixed_model'),"automatic":a.get('automatic',True),"plan_label":a.get('plan_label'),
+                     "priority":a.get('priority','normal')})
     if args.json:print(json.dumps(rows,indent=2));return 0
     print(colored('AI ACCOUNTS','title'))
     for a,row in zip(selected,rows):
         print(colored(f"{a['label']:<12}",a['provider'])+' '+colored(f"{row['status']:<14}",'ok' if row['configured'] else 'low')+' '+colored(a.get('email') or ('correo no publicado' if a.get('single') else 'correo pendiente'),'bold'))
         print('  '+colored(a['home']+(' (perfil existente)' if a.get('legacy') else ''),'muted'))
         if a.get('fixed_model'):print('  '+colored((a.get('plan_label') or '')+' · '+a['fixed_model']+(' · manual' if a.get('automatic') is False else ''),'low'))
+        if a.get('priority')=='low':print('  '+colored('↓ Prioridad baja · última opción automática','low'))
         if not row["configured"] and a.get('enabled',True) and not a.get('single'):print(f"  Login una vez: ai login {a['provider']} {a['account']}")
     return 0
 
@@ -393,6 +395,9 @@ def parser():
     a=sub.add_parser('rename');a.add_argument('provider',choices=['codex','claude']);a.add_argument('old');a.add_argument('new')
     a=sub.add_parser('policy',help='Reservar una cuenta Codex para un modelo verificado')
     a.add_argument('provider',choices=['codex']);a.add_argument('account');a.add_argument('--model');a.add_argument('--auto',choices=['on','off']);a.add_argument('--plan')
+    a=sub.add_parser('priority',help='Prioridad de una cuenta en la selección automática')
+    a.add_argument('provider',choices=['codex','claude']);a.add_argument('account')
+    a.add_argument('priority',choices=['normal','low'])
     a=sub.add_parser('login');a.add_argument('provider',choices=['codex','claude']);a.add_argument('account');a.add_argument('--reauth',action='store_true')
     for provider in ('codex','claude'):
         a=sub.add_parser(provider);a.add_argument('account');a.add_argument('--dry-run',action='store_true')
@@ -493,6 +498,13 @@ def main(argv=None):
                     print('  '+window['name']+': '+compact_tokens(window['tokens']['total'])+' tokens actuales · mediana antes del 429: '+
                           (compact_tokens(reference)+' tokens' if reference is not None else 'UNKNOWN'))
             print('\nLos 429 no demuestran un límite de tokens ni una ventana de reset; confianza baja. No se infiere disponibilidad.')
+            return 0
+        if args.command=='priority':
+            account=manager.account(args.provider,args.account)
+            set_priority(manager,account,args.priority)
+            print(colored(account['label'],account['provider'])+' · '+colored(
+                '↓ Prioridad baja · última opción automática' if args.priority=='low' else 'Prioridad normal',
+                'low' if args.priority=='low' else 'ok'))
             return 0
         if args.command=='policy':
             account=manager.account(args.provider,args.account)

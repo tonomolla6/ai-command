@@ -121,6 +121,7 @@ def usage_card(account,row,width,reset,age):
     email=row.get('email') or account.get('email') or ('Cuenta actual · correo no publicado' if account.get('single') else 'correo pendiente')
     verified=row.get('email_verified',False) or account.get('email_verified',False)
     body=[colored(email,'bold')+colored(' ✓' if verified else ' ○','ok' if verified else 'muted'),colored(state,style)]
+    if account.get('priority')=='low':body.append(colored('↓ Prioridad baja · última opción automática','low'))
     if blocked:
         exhausted=[window_name(w) for w in windows if isinstance(w.get('available_percent'),(int,float)) and w['available_percent']<=0]
         message=('Bloqueada por: ' if state=='AGOTADO' else 'Límite agotado: ')+', '.join(exhausted)

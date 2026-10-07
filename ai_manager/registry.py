@@ -145,6 +145,17 @@ def set_codex_policy(manager,account,model=None,automatic=None,plan=None):
         account.update(current)
 
 
+def set_priority(manager, account, priority):
+    if priority not in ('normal', 'low'):
+        raise ManagerError('La prioridad debe ser normal o low')
+    with manager.lock('registry', blocking=False):
+        manager.config = read_json(manager.config_path)
+        current = manager.account(account['provider'], account['account'])
+        current['priority'] = priority
+        save_registry(manager, 'Set automatic account priority')
+        account.update(current)
+
+
 def fixed_model_arguments(account,extras):
     model=account.get('fixed_model')
     if not model:return []
