@@ -1,0 +1,22 @@
+name: Tests
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: ['3.11', '3.12', '3.13']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '${{ matrix.python }}'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: python -m unittest discover -s tests -q
+      - run: node --test integrations/vscode/tests/profiles.test.js
+      - run: bash -n install.sh integrations/vscode/bin/terminales
+      - run: python scripts/build_release.py --out "$RUNNER_TEMP/release"
