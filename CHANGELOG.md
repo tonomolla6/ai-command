@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.3 — 2026-10-07
+
+- Nombres e identificadores genéricos en las integraciones de VS Code.
+- Control de contenido público en CI y antes de construir paquetes: archivos privados, correos reales y credenciales reconocibles.
+- Ejemplos y capturas con datos ficticios; configuración y autenticación permanecen fuera de las releases.
+
 ## 1.0.2 — 2026-10-07
 
 - Suite de pruebas portable sin Codex/Claude instalados y cierre explícito de fixtures SQLite en Python 3.13.
