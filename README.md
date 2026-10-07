@@ -104,6 +104,7 @@ usa `ai add codex TU_CORREO --id 1 --home ~/.codex` o su equivalente para Claude
 | Recuperar su prioridad habitual | `ai priority codex 2 normal` |
 | Elegir una cuenta sólo para este lanzamiento | `ACCOUNT=codex2 codex`, `ACCOUNT=claude2 claude` |
 | Reanudar un ID con una cuenta concreta | `ACCOUNT=codex2 codex resume ID` |
+| Usar el login actual de AGY / OpenCode | `ai agy`, `ai opencode` |
 
 La prioridad `low` deja una cuenta como último recurso; sigue exigiendo identidad
 y cuota positivas. Dentro de cada prioridad se mantiene el orden por reinicio más
@@ -112,12 +113,13 @@ de cuenta ante un error. También admite `x2`, `c2`, un número o un correo regi
 rechaza cuentas desactivadas y selecciones de otro proveedor. Los argumentos
 nativos y el directorio se conservan. `--version`, login y otros comandos
 administrativos mantienen su comportamiento habitual.
-| Usar el login actual de AGY / OpenCode | `ai agy`, `ai opencode` |
 
 También se crean `claude2`, `codex2` y sus variantes terminadas en `r`.
 
 La selección automática exige identidad correcta y ventanas conocidas con margen.
-Prioriza el próximo reset conocido más cercano; después, el mayor margen mínimo.
+Primero usa las cuentas con prioridad normal; recurre a las de prioridad baja
+cuando las demás no tienen cuota verificada. Dentro de cada prioridad elige el
+próximo reset conocido más cercano; después, el mayor margen mínimo.
 Una ventana general agotada excluye la cuenta aunque otra ventana tenga saldo.
 No cambia cuentas durante una ejecución ni activa compras o créditos de pago.
 
