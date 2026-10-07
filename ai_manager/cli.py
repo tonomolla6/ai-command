@@ -360,6 +360,7 @@ def parser():
     mode=a.add_mutually_exclusive_group();mode.add_argument('--check',action='store_true');mode.add_argument('--rollback',action='store_true');mode.add_argument('--list',action='store_true');mode.add_argument('--to',metavar='vX.Y.Z')
     a=sub.add_parser('migrate',help='Aplicar migraciones privadas de configuración');a.add_argument('--dry-run',action='store_true')
     a=sub.add_parser('configure',help='Preferencias del gestor');a.add_argument('--claude-danger',choices=['on','off'],required=True)
+    sub.add_parser('vscode-install',help='Instalar extensiones de agentes/terminales para este usuario SSH')
     install=sub.add_parser('install',help='Instalar comandos en PATH');install.add_argument('--bin-dir',default=Manager().command_bin())
     install.add_argument('--auto',action='store_true',help='Instalar también codex/claude automáticos en ~/.local/bin')
     install.add_argument('--auto-bin-dir',default=str(Path.home()/'.local/bin'))
@@ -405,6 +406,10 @@ def main(argv=None):
         if args.command=='update':
             from .updater import update
             return update(args)
+        if args.command=='vscode-install':
+            from .vscode import install_extensions
+            install_extensions(manager)
+            return 0
         if args.command=='migrate':
             steps=migrate(manager,args.dry_run)
             print('\n'.join(steps) or 'Configuración al día.')

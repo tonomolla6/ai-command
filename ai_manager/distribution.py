@@ -127,6 +127,14 @@ def install(source, prefix, auto=True):
     package_id = hashlib.sha256(json.dumps(hashes, sort_keys=True).encode()).hexdigest()
     release_name = tag + '-' + package_id[:12]
     launchers = launcher_contents(prefix, manager.accounts(include_inactive=True), auto)
+    import shlex
+    for name in ('terminales','terminales-native','terminal-estado'):
+        if not (source/'integrations/vscode/bin'/name).exists():continue
+        target=prefix/'bin'/name
+        # Preserve pre-existing third-party/local terminal helpers.
+        if target.exists() and not own_launcher(target):continue
+        interpreter='/bin/bash' if name=='terminales' else sys.executable
+        launchers[name]='#!/bin/sh\n# ai-command managed launcher v1\nexec '+shlex.quote(interpreter)+' '+shlex.quote(str(base/'current/integrations/vscode/bin'/name))+' "$@"\n'
     bin_dir.mkdir(parents=True, exist_ok=True)
     originals = {}
     backups = {}

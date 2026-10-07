@@ -172,7 +172,7 @@ tmux set-option -t "$target" @ai_command_auto_restore 1
 native_mode=$(tmux show-option -t "$target" -qv @ai_command_native)
 if [[ "${native_mode:-${AI_COMMAND_TERMINALES_NATIVE:-0}}" == 1 ]]; then
   tmux set-option -t "$target" @ai_command_native 1
-  exec python3 "${AI_COMMAND_TERMINALES_NATIVE_HELPER:-/usr/local/bin/terminales-native}" "$target"
+  exec python3 "${AI_COMMAND_TERMINALES_NATIVE_HELPER:-$(dirname -- "$0")/terminales-native}" "$target"
 fi
 if [[ -n "${TMUX:-}" ]]; then
   exec tmux switch-client -t "$target"

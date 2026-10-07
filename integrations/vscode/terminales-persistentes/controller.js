@@ -3,7 +3,7 @@
 const { randomBytes } = require('node:crypto');
 
 const ROOT = process.env.AI_COMMAND_WORKSPACE_ROOT || require('node:os').homedir();
-const LAUNCHER = process.env.AI_COMMAND_TERMINALES_TEST_LAUNCHER || '/usr/local/bin/terminales';
+const LAUNCHER = process.env.AI_COMMAND_TERMINALES_TEST_LAUNCHER || 'terminales';
 const identity = session => session.id + ':' + session.created;
 const clean = value => String(value || '').replace(/[\x00-\x1f\x7f]/g, ' ').slice(0, 200).trim();
 
