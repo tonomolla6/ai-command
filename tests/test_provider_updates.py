@@ -38,6 +38,13 @@ class ProviderUpdateTests(unittest.TestCase):
         restore_code(self.plan,archive)
         self.assertEqual(self.binary.read_text(),'original code');self.assertEqual(self.binary.stat().st_mode & 0o777,0o755)
 
+    def test_running_codex_companion_also_blocks_native_updates(self):
+        helper=self.root/'codex-code-mode-host'
+        self.plan['companions']=[helper]
+        proc=self.root/'proc';pid=proc/'99999999';pid.mkdir(parents=True)
+        (pid/'exe').symlink_to(helper);(pid/'cmdline').write_bytes(b'private argument\0')
+        self.assertTrue(busy(self.plan,proc))
+
     def test_failed_updater_restores_backup_and_does_not_export_raw_output(self):
         with patch('ai_manager.provider_updates.PROVIDERS',('agy',)), \
              patch('ai_manager.provider_updates.update_plan',return_value=self.plan), \
@@ -48,6 +55,34 @@ class ProviderUpdateTests(unittest.TestCase):
             rows=run_updates(self.manager)
         self.assertEqual(rows[0]['status'],'RESTORED')
         self.assertNotIn('private-updater-data',str(rows));self.assertEqual(self.binary.read_text(),'original code')
+
+    def test_codex_backup_restores_matching_companion_without_copying_unrelated_files(self):
+        helper=self.root/'codex-code-mode-host';helper.write_text('original helper');helper.chmod(0o755)
+        private=self.root/'auth.json';private.write_text('private fixture')
+        self.plan.update(provider='codex',native=True,companions=[helper])
+        with patch('ai_manager.provider_updates.FLOOR',0):
+            archive=snapshot(self.manager,self.plan,'1.0.0')
+            helper.write_text('different helper')
+            changed=snapshot(self.manager,self.plan,'1.0.0')
+        self.assertNotEqual(archive,changed)
+        self.binary.write_text('different cli')
+        restore_code(self.plan,archive)
+        self.assertEqual(self.binary.read_text(),'original code')
+        self.assertEqual(helper.read_text(),'original helper')
+        self.assertEqual(helper.stat().st_mode & 0o777,0o755)
+        self.assertEqual(private.read_text(),'private fixture')
+        import tarfile
+        with tarfile.open(archive) as tar:
+            self.assertEqual(set(tar.getnames()),{'payload','companions/codex-code-mode-host'})
+
+    def test_codex_restore_removes_only_companion_absent_in_snapshot(self):
+        helper=self.root/'codex-code-mode-host'
+        self.plan.update(provider='codex',native=True,companions=[helper])
+        with patch('ai_manager.provider_updates.FLOOR',0):
+            archive=snapshot(self.manager,self.plan,'1.0.0')
+        helper.write_text('new helper');self.binary.write_text('new cli')
+        restore_code(self.plan,archive)
+        self.assertFalse(helper.exists());self.assertEqual(self.binary.read_text(),'original code')
 
     def test_busy_provider_is_skipped_without_backup_or_update(self):
         with patch('ai_manager.provider_updates.PROVIDERS',('agy',)), \

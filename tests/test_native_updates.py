@@ -2,6 +2,7 @@ import base64
 import hashlib
 import io
 import json
+import os
 from pathlib import Path
 import subprocess
 import tarfile
@@ -71,6 +72,33 @@ class NativeUpdateTests(unittest.TestCase):
         self.assertEqual(binary.read_bytes(),b'new codex')
         self.assertEqual(companion.read_bytes(),b'new helper')
 
+    def test_codex_bad_companion_leaves_both_installed_files_unchanged(self):
+        self.plan['provider']='codex'
+        helper=self.root/'codex-code-mode-host';helper.write_bytes(b'old helper')
+        asset=dict(self.asset,companions=[dict(self.asset,target=helper.name)])
+        with patch('ai_manager.native_updates.release_asset',return_value=asset), \
+             patch('ai_manager.native_updates.download',side_effect=[self.blob,b'bad checksum']):
+            with self.assertRaises(ManagerError):install_native(self.plan,'2.0.0',{})
+        self.assertEqual(self.binary.read_bytes(),b'old code')
+        self.assertEqual(helper.read_bytes(),b'old helper')
+
+    def test_codex_cli_replacement_failure_rolls_back_the_companion(self):
+        self.plan['provider']='codex'
+        helper=self.root/'codex-code-mode-host';helper.write_bytes(b'old helper')
+        asset=dict(self.asset,companions=[dict(self.asset,target=helper.name)])
+        replace=os.replace
+        def fail_cli(source,destination):
+            if Path(source).name=='codex' and Path(destination)==self.binary:
+                raise OSError('simulated replacement failure')
+            return replace(source,destination)
+        with patch('ai_manager.native_updates.release_asset',return_value=asset), \
+             patch('ai_manager.native_updates.download',return_value=self.blob), \
+             patch('ai_manager.native_updates.subprocess.run',return_value=subprocess.CompletedProcess([],0,'2.0.1','')), \
+             patch('ai_manager.native_updates.os.replace',side_effect=fail_cli):
+            with self.assertRaises(OSError):install_native(self.plan,'2.0.0',{})
+        self.assertEqual(self.binary.read_bytes(),b'old code')
+        self.assertEqual(helper.read_bytes(),b'old helper')
+
     def test_wrong_checksum_and_wrong_version_keep_existing_code(self):
         with patch('ai_manager.native_updates.release_asset',return_value=self.asset), \
              patch('ai_manager.native_updates.download',return_value=b'corrupted'):
@@ -96,10 +124,22 @@ class NativeUpdateTests(unittest.TestCase):
         name='codex-aarch64-unknown-linux-musl.tar.gz'
         meta={'tag_name':'rust-v0.160.1','assets':[{'name':name,'digest':'sha256:'+'a'*64,
               'browser_download_url':'https://github.com/openai/codex/releases/download/rust-v0.160.1/'+name}]}
+        helper='codex-code-mode-host-aarch64-unknown-linux-musl.tar.gz'
+        meta['assets'].append({'name':helper,'digest':'sha256:'+'b'*64,
+              'browser_download_url':'https://github.com/openai/codex/releases/download/rust-v0.160.1/'+helper})
         with patch('ai_manager.native_updates.platform.machine',return_value='aarch64'), \
              patch('ai_manager.native_updates.platform.system',return_value='Linux'), \
              patch('ai_manager.native_updates.download',return_value=json.dumps(meta).encode()):
-            self.assertEqual(release_asset('codex')['binary'],name[:-7])
+            asset=release_asset('codex')
+            self.assertEqual(asset['binary'],name[:-7])
+            self.assertEqual(asset['companions'][0]['binary'],helper[:-7])
+            self.assertEqual(asset['companions'][0]['version'],asset['version'])
+            meta['assets'][1]['browser_download_url']='https://example.invalid/helper.tar.gz'
+            with patch('ai_manager.native_updates.download',return_value=json.dumps(meta).encode()):
+                with self.assertRaises(ManagerError):release_asset('codex')
+            meta['assets'].pop()
+            with patch('ai_manager.native_updates.download',return_value=json.dumps(meta).encode()):
+                with self.assertRaises(ManagerError):release_asset('codex')
             meta['assets'][0].pop('digest')
             with patch('ai_manager.native_updates.download',return_value=json.dumps(meta).encode()):
                 with self.assertRaises(ManagerError):release_asset('codex')

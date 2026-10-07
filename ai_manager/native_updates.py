@@ -56,12 +56,17 @@ def release_asset(provider):
         name='codex-'+cpu+'-unknown-linux-musl.tar.gz'
     else:
         name='opencode-linux-'+arch+('-musl' if platform.libc_ver()[0]=='musl' else '')+'.tar.gz'
-    assets=[a for a in meta.get('assets',[]) if a.get('name')==name]
-    url='https://github.com/'+repo+'/releases/download/'+tag+'/'+name
-    if len(assets)!=1 or assets[0].get('browser_download_url')!=url or not re.fullmatch(r'sha256:[0-9a-f]{64}',assets[0].get('digest','')):
-        raise ManagerError('Archivo o checksum oficial no verificable')
-    return {'version':version,'url':url,'algorithm':'sha256','digest':assets[0]['digest'][7:],
-            'binary':name[:-7] if provider=='codex' else 'opencode'}
+    def verified_asset(filename,binary):
+        assets=[a for a in meta.get('assets',[]) if a.get('name')==filename]
+        url='https://github.com/'+repo+'/releases/download/'+tag+'/'+filename
+        if len(assets)!=1 or assets[0].get('browser_download_url')!=url or not re.fullmatch(r'sha256:[0-9a-f]{64}',assets[0].get('digest','')):
+            raise ManagerError('Archivo o checksum oficial no verificable')
+        return {'version':version,'url':url,'algorithm':'sha256','digest':assets[0]['digest'][7:],'binary':binary}
+    asset=verified_asset(name,name[:-7] if provider=='codex' else 'opencode')
+    if provider=='codex':
+        helper='codex-code-mode-host-'+cpu+'-unknown-linux-musl'
+        asset['companions']=[dict(verified_asset(helper+'.tar.gz',helper),target='codex-code-mode-host')]
+    return asset
 
 
 def extract_binary(blob,asset,target):
@@ -83,12 +88,40 @@ def install_native(plan,before,env):
     if stable_version(asset['version'])<=stable_version(before):return
     target=plan['binary'];original=target.stat()
     with tempfile.TemporaryDirectory(prefix='.ai-command-native-',dir=target.parent) as directory:
-        candidate=Path(directory)/plan['provider']
-        extract_binary(download(asset['url'],MAX_DOWNLOAD,timeout=120),asset,candidate)
-        candidate.chmod(original.st_mode & 0o777)
-        if os.getuid()==0:os.chown(candidate,original.st_uid,original.st_gid)
+        stage=Path(directory)
+        candidate=stage/plan['provider']
+        components=[(asset,candidate,target)]
+        for companion in asset.get('companions',[]):
+            name=companion['target']
+            if name!='codex-code-mode-host' or plan['provider']!='codex' or companion['version']!=asset['version']:
+                raise ManagerError('Auxiliar nativo inesperado')
+            components.append((companion,stage/name,target.parent/name))
+        # Download and validate the complete version before changing either file.
+        for component,path,destination in components:
+            if destination.is_symlink():raise ManagerError('Auxiliar nativo enlazado; se conserva')
+            extract_binary(download(component['url'],MAX_DOWNLOAD,timeout=120),component,path)
+            path.chmod(original.st_mode & 0o777)
+            if os.getuid()==0:os.chown(path,original.st_uid,original.st_gid)
+            if path!=candidate:
+                result=subprocess.run([str(path),'--help'],capture_output=True,env=env,timeout=20)
+                if result.returncode:raise ManagerError('El auxiliar nativo no arranca')
         result=subprocess.run([str(candidate),'--version'],capture_output=True,text=True,env=env,timeout=20)
         match=re.search(r'\b\d+\.\d+\.\d+\b',result.stdout)
         if result.returncode or not match or match.group()!=asset['version']:
             raise ManagerError('Versión del binario descargado no coincide')
-        os.replace(candidate,target)
+        # Install the companion first and the CLI last; restore every component
+        # if a replacement fails. The maintenance lock/busy check excludes use.
+        installed=[]
+        try:
+            for _,path,destination in reversed(components):
+                backup=stage/(destination.name+'.previous')
+                if destination.exists():
+                    # A hard link keeps the old inode without a missing-path gap.
+                    os.link(destination,backup)
+                os.replace(path,destination)
+                installed.append((destination,backup))
+        except BaseException:
+            for destination,backup in reversed(installed):
+                if backup.exists():os.replace(backup,destination)
+                else:destination.unlink()
+            raise

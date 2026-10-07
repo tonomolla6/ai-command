@@ -41,7 +41,9 @@ def update_plan(provider):
                                PACKAGES[provider]+'@latest','--no-audit','--no-fund']}
     with binary.open('rb') as stream:native=stream.read(4)==b'\x7fELF'
     if provider in ('codex','claude','opencode') and native:
-        return {'provider':provider,'path':binary,'binary':binary,'native':True}
+        plan={'provider':provider,'path':binary,'binary':binary,'native':True}
+        if provider=='codex':plan['companions']=[binary.parent/'codex-code-mode-host']
+        return plan
     if provider in PACKAGES:raise ManagerError('Instalación nativa no verificable')
     command=[str(binary),'update'] if provider in ('claude','agy') else [str(binary),'--pure','upgrade']
     return {'provider':provider,'path':binary,'binary':binary,'command':command}
@@ -49,13 +51,14 @@ def update_plan(provider):
 
 def busy(plan, proc=Path('/proc')):
     root=str(plan['path']);directory=plan['path'].is_dir()
+    companions={str(p) for p in plan.get('companions',[])}
     for entry in proc.iterdir():
         if not entry.name.isdigit() or int(entry.name)==os.getpid():continue
         try:
             target=os.readlink(entry/'exe').removesuffix(' (deleted)')
             args=(entry/'cmdline').read_bytes().split(b'\0')
             paths=[target,*[os.fsdecode(a) for a in args[:3]]]
-            if any(p==root or (directory and p.startswith(root+'/')) for p in paths):return True
+            if any(p==root or p in companions or (directory and p.startswith(root+'/')) for p in paths):return True
         except (OSError,PermissionError):continue
     return False
 
@@ -79,9 +82,15 @@ def code_files(path):
 
 def snapshot(manager,plan,version):
     source=plan['path'];digest=hashlib.sha256();size=0
+    companions={}
+    for path in plan.get('companions',[]):
+        if path.parent!=source.parent or path.name!='codex-code-mode-host' or path.is_symlink():
+            raise ManagerError('Auxiliar nativo no verificable')
+        companions[path.name]=path.exists()
+        digest.update((path.name+':'+str(path.exists())).encode())
     if source.is_dir() and any(p.is_symlink() and not p.resolve().is_relative_to(source) for p in source.rglob('*')):
         raise ManagerError('El código enlaza rutas ajenas; backup rechazado')
-    for path in code_files(source):
+    for path in [*code_files(source),*[p for p in plan.get('companions',[]) if p.exists()]]:
         if source.is_dir() and not path.resolve().is_relative_to(source):
             raise ManagerError('El código enlaza archivos ajenos; backup rechazado')
         digest.update(str(path.relative_to(source) if source.is_dir() else path.name).encode())
@@ -98,10 +107,13 @@ def snapshot(manager,plan,version):
         private_dir(destination)
         archive=destination/'code.tar.gz'
         try:
-            with tarfile.open(archive,'w:gz') as tar:tar.add(source,arcname='payload')
+            with tarfile.open(archive,'w:gz') as tar:
+                tar.add(source,arcname='payload')
+                for name,present in companions.items():
+                    if present:tar.add(source.parent/name,arcname='companions/'+name)
             archive.chmod(0o600)
             write_json(destination/'manifest.json',{'created_at':now(),'source':str(source),
-                       'version':version,'code_sha256':digest.hexdigest(),
+                       'version':version,'code_sha256':digest.hexdigest(),'companions':companions,
                        'archive_sha256':file_hash(archive)})
         except BaseException:
             # Only this incomplete snapshot is removed; prior backups are kept.
@@ -115,11 +127,20 @@ def snapshot(manager,plan,version):
 
 def restore_code(plan,archive):
     target=plan['path'];original=target.stat() if target.exists() else None
+    # New snapshots include exact companion presence. Old snapshots remain
+    # compatible and must never remove an unrecorded helper.
+    meta=read_json(archive.parent/'manifest.json')
+    companions=meta.get('companions',{})
+    allowed={p.name for p in plan.get('companions',[]) if p.parent==target.parent}
+    if not set(companions)<=allowed:raise ManagerError('Auxiliares del backup inesperados')
+    if meta.get('archive_sha256')!=file_hash(archive):raise ManagerError('Backup de código no verificable')
     stage=Path(tempfile.mkdtemp(prefix='.ai-command-restore-',dir=target.parent))
     displaced=stage/'failed-code'
     try:
         with tarfile.open(archive,'r:gz') as tar:
-            if any(Path(m.name).is_absolute() or '..' in Path(m.name).parts or Path(m.name).parts[0]!='payload' for m in tar):
+            if any(Path(m.name).is_absolute() or '..' in Path(m.name).parts or
+                   (Path(m.name).parts[0]!='payload' and m.name not in
+                    {'companions/'+name for name,present in companions.items() if present}) for m in tar):
                 raise ManagerError('Backup de código inseguro')
             tar.extractall(stage,filter='data')
         if target.exists():os.rename(target,displaced)
@@ -128,6 +149,10 @@ def restore_code(plan,archive):
             if displaced.exists():os.rename(displaced,target)
             raise
         if original and os.getuid()==0:os.chown(target,original.st_uid,original.st_gid)
+        for name,present in companions.items():
+            destination=target.parent/name
+            if present:os.replace(stage/'companions'/name,destination)
+            else:destination.unlink(missing_ok=True)
     finally:
         if (stage/'payload').exists() and not target.exists():
             # Preserve the exact recovery directory if restoring could not finish.
