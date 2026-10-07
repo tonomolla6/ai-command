@@ -14,7 +14,7 @@ import subprocess
 import sys
 import tempfile
 
-from .core import Manager, ManagerError, atomic_write, now, read_json
+from .core import Manager, ManagerError, atomic_write, now, read_json, backup_files
 from .migrations import CURRENT, plan
 
 TAG = re.compile(r'v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)\Z')
@@ -58,6 +58,7 @@ def installation(root=None):
 @contextlib.contextmanager
 def install_lock(base):
     base.mkdir(parents=True, exist_ok=True)
+    base.chmod(0o755)
     fd = os.open(base / '.install.lock', os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
     try:
         try:
@@ -163,6 +164,7 @@ def install(source, prefix, auto=True):
         old_meta = read_json(base / 'install.json')
         native = base / 'native'
         native.mkdir(exist_ok=True)
+        native.chmod(0o755)
         # Reuse originals retained by older installations, without copying auth.
         from .providers import executable
         for provider in ('codex', 'claude', 'agy', 'opencode'):
@@ -215,6 +217,18 @@ def install(source, prefix, auto=True):
                     target.unlink()  # Native target itself remains untouched.
                 atomic_write(target, content, 0o755)
             point_current(base, release)
+            # Adopt only our older per-user launchers. Their stable import path
+            # now follows future global updates instead of an abandoned checkout.
+            legacy_dir=manager.home/'.local/bin'
+            adopted={}
+            if legacy_dir.absolute()!=bin_dir.absolute():
+                for name,content in launchers.items():
+                    old=legacy_dir/name
+                    if old.is_file() and not old.is_symlink() and own_launcher(old) and old.read_text()!=content:
+                        adopted[old]=content
+                if adopted:
+                    backup_files(manager.home,adopted.keys(),'Adopt legacy managed launchers into versioned installation')
+                    for old,content in adopted.items():atomic_write(old,content,0o755)
             metadata = {'app': 'ai-command', 'version': tag, 'active': release_name,
                         'previous': old_meta.get('active') if old_meta.get('active') != release_name else old_meta.get('previous'),
                         'prefix': str(prefix), 'python': sys.executable, 'auto': auto, 'updated_at': now()}
