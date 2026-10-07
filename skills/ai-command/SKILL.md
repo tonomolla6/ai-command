@@ -61,5 +61,15 @@ recibe --auto y conserva los deny explícitos. Se aplica al abrir y reanudar.
 `ai install --shell` prepara funciones Bash para los comandos directos sin mover
 los binarios nativos; cargar `source ~/.bashrc` en una terminal que ya estaba abierta.
 
+`ai usage codex|claude|agy|opencode` consulta sólo ese proveedor. Admite refresh,
+cached y JSON. El aviso interactivo de nueva release puede actualizar y relanzar
+el comando exacto; no pregunta en pipelines ni salidas JSON.
+
+`ai providers-update --check` inspecciona sin actualizar. El mantenimiento periódico
+de proveedores es opt-in: `sudo ai providers-update --cron on/off/status`. Usa
+instaladores oficiales, aplaza procesos activos y guarda backups sólo de código;
+no cambia cuentas, credenciales ni historial. No lo actives en otro servidor sin
+una petición de instalación allí.
+
 Cierra con el comando exacto de login pendiente, validación real y límites de lo
 probado. No describas un dry-run como una continuación autenticada comprobada.

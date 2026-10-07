@@ -246,6 +246,10 @@ def login(manager,args):
 def doctor(manager,args):
     problems=[];warnings=[]
     print(colored("AI DOCTOR · diagnóstico",'title'))
+    for provider in ('claude','agy','opencode'):
+        print(provider+' auto-approve: '+('ON' if manager.config.get(provider+'_skip_permissions',False) else 'OFF'))
+    from .provider_updates import configure_cron
+    print('Actualizaciones periódicas CLI: '+('ON · cada 6 horas' if configure_cron(manager,'status') else 'OFF'))
     for provider,label in (("codex","Codex CLI"),("claude","Claude Code")):
         v=version(provider);print(colored(label,provider)+': '+colored('OK' if v!='UNKNOWN' else 'ERROR','ok' if v!='UNKNOWN' else 'empty')+' · '+v)
         if v=="UNKNOWN":problems.append(label+" no disponible")
@@ -360,6 +364,9 @@ def parser():
     a=sub.add_parser('update',help='Actualizar el gestor desde la última release estable')
     mode=a.add_mutually_exclusive_group();mode.add_argument('--check',action='store_true');mode.add_argument('--rollback',action='store_true');mode.add_argument('--list',action='store_true');mode.add_argument('--to',metavar='vX.Y.Z')
     a=sub.add_parser('migrate',help='Aplicar migraciones privadas de configuración');a.add_argument('--dry-run',action='store_true')
+    a=sub.add_parser('providers-update',help='Mantener Codex, Claude, AGY y OpenCode con sus instaladores oficiales')
+    mode=a.add_mutually_exclusive_group();mode.add_argument('--check',action='store_true');mode.add_argument('--cron',choices=['on','off','status']);mode.add_argument('--scheduled',action='store_true')
+    a.add_argument('--json',action='store_true')
     a=sub.add_parser('configure',help='Preferencias del gestor')
     for provider in ('claude','agy','opencode'):a.add_argument('--'+provider+'-danger',choices=['on','off'])
     a=sub.add_parser('native',help='CLI original de AGY/OpenCode con tu política de permisos')
@@ -416,6 +423,18 @@ def main(argv=None):
         if args.command=='update':
             from .updater import update
             return update(args)
+        if args.command=='providers-update':
+            from .provider_updates import configure_cron,run_updates
+            if args.cron:
+                enabled=configure_cron(manager,args.cron)
+                print('Actualizaciones de CLI: '+('ON · cada 6 horas (minuto 17)' if enabled else 'OFF'))
+                return 0
+            rows=run_updates(manager,args.check)
+            if args.json:print(json.dumps({'providers':rows},indent=2))
+            else:
+                for row in rows:print(row['provider']+': '+row['status']+' · '+str(row.get('before',''))+
+                                      (' → '+row['after'] if row.get('after') else ''))
+            return int(any(row['status'] in ('ERROR','RESTORED','RECOVERY_NEEDED') for row in rows))
         if args.command=='vscode-install':
             from .vscode import install_extensions
             install_extensions(manager)

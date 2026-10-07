@@ -63,7 +63,8 @@ no comparte sus logins. El instalador conserva los CLI nativos y rechaza sobresc
 un binario ajeno. Si un CLI ocupa físicamente el mismo destino, usa otro prefijo o
 `./install.sh --no-auto`; `ai auto codex` y `ai auto claude` siguen disponibles.
 
-No se instalan ni se actualizan los proveedores automáticamente.
+La instalación no actualiza los proveedores. Puedes activar después el mantenimiento
+periódico descrito más abajo.
 Consulta sus instrucciones oficiales: [Codex](https://developers.openai.com/codex/cli/),
 [Claude Code](https://code.claude.com/docs/en/setup), [OpenCode](https://opencode.ai/docs/).
 
@@ -240,6 +241,28 @@ Para otro servidor instala el mismo tag y configura allí las cuentas. Trasladar
 logins o historial es una operación privada aparte, explícita y con backup: un
 `git clone` o `ai update` no los transporta. Consulta
 [el diseño de versiones y migraciones](docs/UPDATES.md) para añadir nuevas funciones.
+
+## Actualización periódica de los CLI
+
+```bash
+ai providers-update --check          # inspección sin actualizar
+sudo ai providers-update --cron on   # cada 6 horas, en el minuto 17
+ai providers-update --cron status
+sudo ai providers-update --cron off
+```
+
+La tarea ejecuta los instaladores oficiales detectados: npm para las instalaciones
+globales de Codex/Claude, `agy update` y `opencode upgrade`. Aplaza un proveedor si
+tiene procesos activos, usa un lock y conserva backups privados sólo del código,
+deduplicados por contenido. Comprueba la versión posterior y restaura el código
+anterior si falla la actualización. No toca credenciales, conversaciones ni planes.
+Reserva al menos 15 GiB libres y espacio adicional para cada actualización.
+
+Los registros están bajo `/var/log/ai-command/`, accesibles sólo por root y con
+rotación. No guardan la salida bruta del instalador ni envían correo. Puedes revisar
+el último resultado en `~/.local/state/ai-manager/provider-updates.json` o ejecutar
+`ai providers-update` manualmente. Este cron es distinto de `ai update`, que sigue
+actualizando el gestor desde sus releases verificadas.
 
 ## VS Code Remote SSH y skill
 
