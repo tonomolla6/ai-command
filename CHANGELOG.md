@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.2.0 — 2026-10-07
+
+- Prioridad `low` por cuenta: la rotación usa antes las cuentas normales con cuota verificada y mantiene el orden por reset dentro de cada prioridad. Se restaura con `normal` y aparece en cuentas y uso.
+- `ACCOUNT=codex2 codex` y `ACCOUNT=claude2 claude` eligen explícitamente para ese lanzamiento, incluido resume y comandos nativos. También admiten xN/cN, número o correo registrado; no consultan cuotas ni rotan a otra cuenta.
+- Los perfiles, el modelo reservado y los permisos de Claude se respetan al elegir por variable; las cuentas desactivadas y los proveedores distintos se rechazan.
+
 ## 1.1.2 — 2026-10-07
 
 - Conserva los lanzadores y atajos idénticos entre versiones para evitar escrituras y fsync innecesarios en servidores con disco ocupado. Los cambios reales mantienen backup y sustitución atómica.
