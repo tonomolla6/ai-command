@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.1.0 — 2026-10-07
+
+- Políticas explícitas de autoaprobación para AGY y OpenCode en sesiones nuevas, resume y comandos nativos mediante integración Bash opcional.
+- Aviso de release estable al usar comandos interactivos; aceptar actualiza y ejecuta de nuevo el argv original sin cambiar de directorio.
+- `ai usage <proveedor>` y `ai limits <proveedor>` consultan sólo las cuentas elegidas y aprovechan el ancho del panel.
+- Cron opt-in para actualizadores oficiales de los cuatro CLI, con aplazamiento de procesos activos, backups de código, comprobación y recuperación.
+
 ## 1.0.3 — 2026-10-07
 
 - Nombres e identificadores genéricos en las integraciones de VS Code.

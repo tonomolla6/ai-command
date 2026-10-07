@@ -43,7 +43,7 @@ en `PATH`. `git` permite instalar desde el repositorio; `fzf` mejora el menú y
 estándar de Python y funciona en x86_64 y ARM64.
 
 ```bash
-git clone --branch v1.0.3 --depth 1 https://github.com/tonomolla6/ai-command.git
+git clone --branch v1.1.0 --depth 1 https://github.com/tonomolla6/ai-command.git
 cd ai-command
 ./install.sh
 export PATH="$HOME/.local/bin:$PATH"  # instalación sin sudo
@@ -219,7 +219,7 @@ no se ofrece como actualización. En instalaciones globales puede pedir sudo.
 ai --version
 ai update --check           # ver la última release estable publicada
 ai update                   # descargarla, verificarla e instalarla
-ai update --to v1.0.3       # fijar una release estable concreta
+ai update --to v1.1.0       # fijar una release estable concreta
 ai update --list            # versiones conservadas en este servidor
 ai update --rollback        # volver a la versión anterior compatible
 ai migrate --dry-run        # ver migraciones pendientes, sin aplicarlas
