@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.1 — 2026-10-07
+
+- Solicita JSON explícitamente al consultar metadatos de GitHub/npm para actualizaciones de binarios independientes; mantiene las descargas de archivos en modo binario.
+- Pruebas de regresión de las cabeceras HTTP en la capa real de descarga.
+
 ## 1.1.0 — 2026-10-07
 
 - Políticas explícitas de autoaprobación para AGY y OpenCode en sesiones nuevas, resume y comandos nativos mediante integración Bash opcional.

@@ -18,9 +18,9 @@ API = 'https://api.github.com/repos/' + REPO
 MAX_ARCHIVE = 32 * 1024 * 1024
 
 
-def download(url, limit, timeout=30):
+def download(url, limit, timeout=30, accept=None):
     request = urllib.request.Request(url, headers={'User-Agent': 'ai-command-updater',
-        'Accept': 'application/vnd.github+json' if url.startswith(API) else 'application/octet-stream'})
+        'Accept': accept or ('application/vnd.github+json' if url.startswith(API) else 'application/octet-stream')})
     try:
         with urllib.request.urlopen(request, timeout=timeout) as response:
             data = response.read(limit + 1)

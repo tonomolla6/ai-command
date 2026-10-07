@@ -10,7 +10,7 @@ import unittest
 from unittest.mock import patch
 
 from ai_manager.core import ManagerError
-from ai_manager.native_updates import extract_binary,install_native,release_asset
+from ai_manager.native_updates import extract_binary,install_native,release_asset,metadata
 from ai_manager.provider_updates import update_plan,run_updates,InsufficientSpace
 from ai_manager.core import Manager
 
@@ -107,3 +107,21 @@ class NativeUpdateTests(unittest.TestCase):
              patch('ai_manager.native_updates.install_native') as install:
             rows=run_updates(manager);install.assert_not_called()
         self.assertEqual(rows[0]['status'],'SKIPPED_SPACE')
+
+    def test_real_download_layer_requests_json_from_github_and_npm_metadata(self):
+        for url,accept in [('https://api.github.com/repos/openai/codex/releases/latest','application/vnd.github+json'),
+                           ('https://registry.npmjs.org/@anthropic-ai%2fclaude-code/latest','application/json')]:
+            def response(request,timeout):
+                # npm answers octet-stream with "[object Object]"; GitHub rejects it.
+                self.assertEqual(request.get_header('Accept'),accept)
+                return io.BytesIO(b'{"version":"2.0.1"}')
+            with patch('ai_manager.updater.urllib.request.urlopen',side_effect=response):
+                self.assertEqual(metadata(url),{'version':'2.0.1'})
+
+    def test_real_download_layer_keeps_archive_requests_as_binary(self):
+        from ai_manager.updater import download
+        def response(request,timeout):
+            self.assertEqual(request.get_header('Accept'),'application/octet-stream')
+            return io.BytesIO(b'archive')
+        with patch('ai_manager.updater.urllib.request.urlopen',side_effect=response):
+            self.assertEqual(download('https://example.com/release.tar.gz',100),b'archive')

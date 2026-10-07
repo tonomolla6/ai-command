@@ -23,18 +23,23 @@ def stable_version(value):
     return tuple(map(int,match.groups()))
 
 
+def metadata(url):
+    accept='application/vnd.github+json' if url.startswith('https://api.github.com/') else 'application/json'
+    return json.loads(download(url,2*1024**2,accept=accept))
+
+
 def release_asset(provider):
     machine=platform.machine().lower()
     arch={'x86_64':'x64','amd64':'x64','aarch64':'arm64','arm64':'arm64'}.get(machine)
     if platform.system()!='Linux' or not arch:raise ManagerError('Plataforma nativa no soportada')
     if provider=='claude':
-        main=json.loads(download('https://registry.npmjs.org/@anthropic-ai%2fclaude-code/latest',1024**2))
+        main=metadata('https://registry.npmjs.org/@anthropic-ai%2fclaude-code/latest')
         version=main['version'];stable_version(version)
         suffix='-musl' if platform.libc_ver()[0]=='musl' else ''
         package='@anthropic-ai/claude-code-linux-'+arch+suffix
         if main.get('name')!='@anthropic-ai/claude-code' or main.get('optionalDependencies',{}).get(package)!=version:
             raise ManagerError('Distribución oficial de Claude no verificable')
-        meta=json.loads(download('https://registry.npmjs.org/'+package.replace('/','%2f')+'/'+version,1024**2))
+        meta=metadata('https://registry.npmjs.org/'+package.replace('/','%2f')+'/'+version)
         dist=meta['dist'];url=dist['tarball'];integrity=dist['integrity']
         if meta.get('name')!=package or meta.get('version')!=version or not url.startswith('https://registry.npmjs.org/'+package+'/-/'):
             raise ManagerError('Origen de Claude inesperado')
@@ -43,7 +48,7 @@ def release_asset(provider):
         if len(expected)!=128:raise ManagerError('Integridad de Claude no válida')
         return {'version':version,'url':url,'algorithm':'sha512','digest':expected,'binary':'claude'}
     repo={'codex':'openai/codex','opencode':'anomalyco/opencode'}[provider]
-    meta=json.loads(download('https://api.github.com/repos/'+repo+'/releases/latest',2*1024**2))
+    meta=metadata('https://api.github.com/repos/'+repo+'/releases/latest')
     tag=meta['tag_name'];version='.'.join(map(str,stable_version(tag)))
     if meta.get('draft') or meta.get('prerelease'):raise ManagerError('Release nativa no estable')
     if provider=='codex':
