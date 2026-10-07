@@ -151,6 +151,10 @@ class Manager:
         private_dir(self.state)
 
     def command_bin(self):
+        if not self.config.get('command_bin'):
+            from .distribution import installation
+            try:return str(Path(read_json(installation()/'install.json')['prefix'])/'bin')
+            except (ManagerError,KeyError):pass
         return self.config.get('command_bin') or ("/usr/local/bin" if os.getuid()==0 else str(self.home/'.local/bin'))
 
     def accounts(self, provider=None, include_inactive=False):

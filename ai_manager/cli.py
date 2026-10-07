@@ -24,6 +24,10 @@ from .registry import add_account, rename_account, save_registry, sync_identity,
 from .ui import colored, render_usage, activity_lines, compact_tokens
 from .single_tools import SINGLE_TOOLS, current_tools, launch_tool, models, list_tool_sessions, local_activity
 from .claude_setup import repair_onboarding
+from .permissions import claude_danger_enabled, claude_arguments
+from .migrations import migrate, CURRENT
+from .core import private_dir, write_json
+from . import __version__
 
 
 def quota_state(value):
@@ -146,8 +150,6 @@ def launch(manager,args,resume=False,session=None):
         command.append("--no-daemon")
         if account.get("shared_sqlite_home"):
             command.extend(["-c","sqlite_home="+json.dumps(account['shared_sqlite_home'])])
-    else:
-        command.append('--dangerously-skip-permissions')
     if session:command.extend(prepare_resume(manager,account,session,dry_run=getattr(args,'dry_run',False)))
     extras=list(getattr(args,"extra",[]) or [])
     if extras[:1]==["--"]:extras=extras[1:]
@@ -158,9 +160,11 @@ def launch(manager,args,resume=False,session=None):
         if args.provider=="claude":command.append(prompt)
         else:command.extend(["-c","developer_instructions="+json.dumps(prompt)])
     command.extend(extras)
+    danger = args.provider == 'claude' and claude_danger_enabled(manager)
+    if danger:command=[command[0], *claude_arguments(command[1:])]
     if getattr(args,"dry_run",False):
         print(json.dumps({"command":command,"cwd":str(cwd),"home":account["home"],
-                          "environment":{'IS_SANDBOX':'1'} if args.provider=='claude' else {},
+                          "environment":{'IS_SANDBOX':'1'} if danger else {},
                           "provider":account['provider'],"account":account['account'],"email":account.get('email'),
                           "automatic":getattr(args,'automatic',False),
                           "next_reset_at":getattr(args,'auto_reset',None),
@@ -174,7 +178,7 @@ def launch(manager,args,resume=False,session=None):
               f" · {cwd}"+(f" · resume {session['id']}" if session else ""),flush=True)
         # Same foreground process group/terminal so Ctrl+C/Ctrl+D retain CLI semantics.
         env=manager.env(account);env['AI_MANAGER_BOUND_PROVIDER']=account['provider']
-        if account['provider']=='claude':env['IS_SANDBOX']='1'
+        if danger:env['IS_SANDBOX']='1'
         try:result=subprocess.run(command,env=env,cwd=cwd)
         except KeyboardInterrupt:return 130
     if resume and result.returncode:
@@ -284,7 +288,7 @@ def doctor(manager,args):
         if not path.is_symlink() or not path.exists() or not safe_file(path.resolve(),max_bytes=2*1024*1024):bad_links+=1
     if bad_links:problems.append(f"{bad_links} enlaces de instrucciones requieren revisión")
     codex_homes={a.get('shared_sqlite_home') for a in manager.accounts('codex')}
-    history_ok=len(codex_homes)==1 and None not in codex_homes and all(Path(a['home']).is_dir() for a in manager.accounts())
+    history_ok=(not manager.accounts('codex') or (len(codex_homes)==1 and None not in codex_homes)) and all(Path(a['home']).is_dir() for a in manager.accounts())
     if not history_ok:problems.append('Configuración de historial compartido incoherente')
     print("Shared history: "+colored("OK" if not bad_links and history_ok else "REVISAR",'ok' if not bad_links and history_ok else 'empty')+" · Codex sqlite_home; Claude resume por ruta; auth separado")
     print("fzf: "+("installed" if shutil.which('fzf') else "not installed (menú estándar disponible)"))
@@ -349,12 +353,17 @@ def menu(manager,switch=False):
 
 def parser():
     p=argparse.ArgumentParser(prog='ai',description='Cuentas legítimas independientes y sesiones en el mismo proyecto.')
+    p.add_argument('--version',action='version',version='AI Command '+__version__)
     sub=p.add_subparsers(dest='command')
-    sub.add_parser('setup',help='Preparar cinco perfiles sin copiar credenciales')
+    a=sub.add_parser('setup',help='Preparar registro sin copiar credenciales');a.add_argument('--empty',action='store_true',help='Registro vacío para dar de alta sólo tus cuentas')
+    a=sub.add_parser('update',help='Actualizar el gestor desde la última release estable')
+    mode=a.add_mutually_exclusive_group();mode.add_argument('--check',action='store_true');mode.add_argument('--rollback',action='store_true');mode.add_argument('--list',action='store_true');mode.add_argument('--to',metavar='vX.Y.Z')
+    a=sub.add_parser('migrate',help='Aplicar migraciones privadas de configuración');a.add_argument('--dry-run',action='store_true')
+    a=sub.add_parser('configure',help='Preferencias del gestor');a.add_argument('--claude-danger',choices=['on','off'],required=True)
     install=sub.add_parser('install',help='Instalar comandos en PATH');install.add_argument('--bin-dir',default=Manager().command_bin())
     install.add_argument('--auto',action='store_true',help='Instalar también codex/claude automáticos en ~/.local/bin')
     install.add_argument('--auto-bin-dir',default=str(Path.home()/'.local/bin'))
-    a=sub.add_parser('auto',help='Elegir cuenta por cuota fresca y retomar la sesión del directorio')
+    a=sub.add_parser('auto',help='Elegir cuenta por cuota fresca; resume sólo si se pide')
     a.add_argument('provider',choices=['codex','claude'])
     mode=a.add_mutually_exclusive_group();mode.add_argument('--new',action='store_true');mode.add_argument('--resume',action='store_true')
     a.add_argument('--session');a.add_argument('--pick',action='store_true');a.add_argument('--dry-run',action='store_true')
@@ -393,13 +402,37 @@ def main(argv=None):
     args.extra=extra
     manager=Manager()
     try:
-        if args.command=='setup':setup(manager);return 0
+        if args.command=='update':
+            from .updater import update
+            return update(args)
+        if args.command=='migrate':
+            steps=migrate(manager,args.dry_run)
+            print('\n'.join(steps) or 'Configuración al día.')
+            return 0
+        if args.command=='setup':
+            if args.empty and not manager.config_path.exists():
+                private_dir(manager.config_dir);private_dir(manager.state)
+                write_json(manager.config_path,{'schema':1,'manager_schema':CURRENT,'accounts':[],
+                    'claude_skip_permissions':False})
+                print('Registro vacío preparado. Añade cuentas con ai add.')
+            else:setup(manager)
+            migrate(manager)
+            return 0
         if args.command=='install':
             source=Path(__file__).resolve().parent.parent
             install_commands(source,args.bin_dir,manager.accounts(include_inactive=True) or None)
             if args.auto:install_auto_commands(source,args.auto_bin_dir)
             return 0
+        migrate(manager)
         manager.require_setup()
+        if args.command=='configure':
+            with manager.lock('registry',timeout=15):
+                backup_files(manager.home,[manager.config_path],'Change explicit Claude permission policy')
+                manager.config=read_json(manager.config_path)
+                manager.config['claude_skip_permissions']=args.claude_danger=='on'
+                write_json(manager.config_path,manager.config)
+            print('Claude bypassPermissions: '+args.claude_danger+' · aplica a nuevos lanzamientos y resume')
+            return 0
         if args.command=='activity':
             activity=local_activity(manager)
             if args.json:print(json.dumps(activity,indent=2));return 0

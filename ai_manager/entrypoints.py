@@ -4,6 +4,7 @@ import sys
 
 from .core import ManagerError
 from .providers import executable
+from .permissions import claude_arguments, claude_danger_enabled, is_claude_launch
 
 
 def provider_main(provider, argv=None):
@@ -18,7 +19,11 @@ def provider_main(provider, argv=None):
     try:
         if not managed:
             path = executable(provider)
-            os.execv(path, [path, *argv])
+            if provider == 'claude' and is_claude_launch(argv) and claude_danger_enabled():
+                env = dict(os.environ);env['IS_SANDBOX'] = '1'
+                os.execve(path, [path, *claude_arguments(argv)], env)
+            else:
+                os.execv(path, [path, *argv])
         else:
             options = []
             if resume_command:

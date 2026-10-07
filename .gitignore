@@ -1,0 +1,14 @@
+__pycache__/
+*.pyc
+.venv/
+dist/
+*.vsix
+.env
+.env.*
+auth.json
+.credentials.json
+config.local.json
+*.db
+*.sqlite*
+*.jsonl
+.ai/

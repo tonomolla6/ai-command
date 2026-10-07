@@ -124,6 +124,18 @@ def setup(manager):
 
 
 def install_commands(source, bin_dir, accounts=None):
+    from .distribution import installation, launcher_contents, own_launcher
+    try:base=installation(source)
+    except ManagerError:base=None
+    if base is not None and Path(bin_dir).absolute()==base.parent.parent/'bin':
+        meta=json.loads((base/'install.json').read_text())
+        commands=launcher_contents(Path(meta['prefix']),accounts or [],meta.get('auto',True))
+        for name,content in commands.items():
+            target=Path(bin_dir)/name
+            if target.exists() and not own_launcher(target):raise ManagerError('Comando ajeno conservado: '+str(target))
+            if not target.exists() or target.read_text()!=content:atomic_write(target,content,0o755)
+        print('Atajos actualizados en '+str(bin_dir))
+        return
     source = Path(source).resolve()
     bin_dir = Path(bin_dir)
     bin_dir.mkdir(parents=True,exist_ok=True)

@@ -29,7 +29,7 @@ def executable(provider):
     # the original installation path/symlink so provider updates still work.
     # A system installation can keep its original ARM64 binaries next to the
     # package. Each user's HOME/auth remains independent of the global code.
-    directories=[*os.get_exec_path(),str(Path(__file__).resolve().parent.parent/'native')]
+    directories=[str(Path(__file__).resolve().parent.parent/'native'),*os.get_exec_path()]
     for directory in directories:
         path = Path(directory or os.curdir).absolute() / provider
         if not path.is_file() or not os.access(path, os.X_OK):

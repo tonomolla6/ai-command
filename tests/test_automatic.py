@@ -236,6 +236,7 @@ class EntrypointTests(unittest.TestCase):
                                     ('claude', ['auth', 'status']), ('claude', ['update']),
                                     ('claude', ['-p', 'test']), ('codex', [])]:
             with self.subTest(arguments=arguments), \
+                 patch('ai_manager.entrypoints.claude_danger_enabled', return_value=False), \
                  patch('ai_manager.entrypoints.sys.stdin.isatty', return_value=False), \
                  patch('ai_manager.entrypoints.executable', return_value='/original/' + provider), \
                  patch('ai_manager.entrypoints.os.execv', side_effect=SystemExit(0)) as execute, \
@@ -243,6 +244,17 @@ class EntrypointTests(unittest.TestCase):
                 with self.assertRaises(SystemExit): provider_main(provider, arguments)
                 execute.assert_called_once_with('/original/' + provider, ['/original/' + provider, *arguments])
                 main.assert_not_called()
+
+    def test_native_claude_resume_and_print_enforce_requested_danger_policy(self):
+        for argv in (['--resume','session-id'],['-r','session-id'],['--continue'],['-p','example']):
+            with patch('ai_manager.entrypoints.claude_danger_enabled',return_value=True), \
+                 patch('ai_manager.entrypoints.executable',return_value='/original/claude'), \
+                 patch('ai_manager.entrypoints.os.execve',side_effect=SystemExit(0)) as execute:
+                with self.assertRaises(SystemExit):provider_main('claude',argv)
+                args=execute.call_args.args
+                self.assertEqual(args[1][1:4],['--dangerously-skip-permissions','--permission-mode','bypassPermissions'])
+                self.assertEqual(args[1][4:],argv)
+                self.assertEqual(args[2]['IS_SANDBOX'],'1')
 
     def test_bare_tty_and_namespaced_flags_use_manager(self):
         with patch.dict(os.environ, {'AI_MANAGER_BOUND_PROVIDER': ''}), \

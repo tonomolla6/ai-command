@@ -147,7 +147,7 @@ class ProfileWorkflowTests(unittest.TestCase):
         self.assertEqual(len(list(destination.iterdir())),21)
         for name in ('ai','x1','x2','c1','c2','c3','x1r','x2r','c1r','c2r','c3r','claude2','claude2r','codex2','codex2r'):
             self.assertTrue(os.access(destination/name,os.X_OK))
-        self.assertNotIn('update',parser()._subparsers._group_actions[0].choices)
+        self.assertTrue(parser().parse_args(['update','--check']).check)
 
 
 class HandoffTests(unittest.TestCase):
