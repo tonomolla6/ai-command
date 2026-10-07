@@ -46,8 +46,10 @@ def executable(provider):
 
 def version(provider):
     try:
+        env=dict(os.environ)
+        if provider=='agy':env['AGY_CLI_DISABLE_AUTO_UPDATE']='1'
         result = subprocess.run([executable(provider), "--version"], capture_output=True,
-                                text=True, timeout=10)
+                                text=True, timeout=10,env=env)
         return result.stdout.strip() if result.returncode == 0 else "UNKNOWN"
     except (OSError, subprocess.TimeoutExpired, ManagerError):
         return "UNKNOWN"

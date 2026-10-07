@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.1 — 2026-10-07
+
+- La migración de una instalación anterior conserva sus ejecutables nativos aunque no estén directamente en PATH.
+- Añadida prueba de actualización desde el layout anterior usado en servidores compartidos.
+- Las consultas y lanzamientos gestionados de AGY desactivan su auto-update nativo para conservar los binarios compartidos.
+
 ## 1.0.0 — 2026-10-07
 
 - Primera versión pública: cuentas por correo, perfiles aislados y atajos dinámicos.

@@ -171,7 +171,8 @@ def install(source, prefix, auto=True):
             p = native / provider
             if not p.exists():
                 try:
-                    original = originals.get(provider) or Path(executable(provider)).resolve()
+                    legacy=prefix/'lib/ai-manager/native'/provider
+                    original = originals.get(provider) or (legacy.resolve() if legacy.is_file() else Path(executable(provider)).resolve())
                     if original != bin_dir / provider:
                         p.symlink_to(original)
                 except ManagerError:

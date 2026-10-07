@@ -24,6 +24,7 @@ class InstallationTests(unittest.TestCase):
         repo=Path(__file__).resolve().parent.parent
         shutil.copytree(repo/'ai_manager',self.source/'ai_manager',ignore=shutil.ignore_patterns('__pycache__'))
         (self.source/'VERSION').write_text('1.0.0\n')
+        (self.source/'ai_manager/__init__.py').write_text('__version__ = \"1.0.0\"\n')
         self.prefix=self.root/'prefix'
         self.home=self.root/'home';self.home.mkdir()
         self.env=patch.dict(os.environ,{'HOME':str(self.home)})
@@ -75,6 +76,17 @@ class InstallationTests(unittest.TestCase):
         (base/'releases'/first['active']/'ai_manager/cli.py').write_text('altered')
         with self.assertRaises(ManagerError):rollback(base)
         self.assertEqual(read_json(base/'install.json')['version'],'v1.0.1')
+
+    def test_upgrade_retains_native_binaries_from_legacy_manager(self):
+        legacy=self.prefix/'lib/ai-manager/native';legacy.mkdir(parents=True)
+        for name in ('codex','claude','agy','opencode'):
+            native=legacy/name;native.write_text('#!/bin/sh\necho legacy-native\n');native.chmod(0o755)
+        with patch('ai_manager.providers.executable',side_effect=ManagerError('not on PATH')):
+            install(self.source,self.prefix)
+        for name in ('codex','claude','agy','opencode'):
+            retained=self.prefix/'lib/ai-command/native'/name
+            self.assertEqual(retained.resolve(),(legacy/name).resolve())
+        self.assertEqual(subprocess.check_output([self.prefix/'bin/claude','--version'],text=True).strip(),'legacy-native')
 
     def test_future_schema_refused_before_installation(self):
         m=Manager();private_dir(m.config_dir)

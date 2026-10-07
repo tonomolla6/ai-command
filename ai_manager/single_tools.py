@@ -1,5 +1,6 @@
 """Existing single-account tools. No credential migration or private endpoints."""
 import json
+import os
 from pathlib import Path
 import re
 import subprocess
@@ -36,8 +37,10 @@ def current_status(manager,account):
 
 
 def run_read(provider,args,cwd,timeout=25):
+    env=dict(os.environ)
+    if provider=='agy':env['AGY_CLI_DISABLE_AUTO_UPDATE']='1'
     result=subprocess.run([executable(provider),*args],cwd=cwd,stdin=subprocess.DEVNULL,
-                          capture_output=True,text=True,timeout=timeout)
+                          capture_output=True,text=True,timeout=timeout,env=env)
     if result.returncode:
         raise ManagerError(provider+': la consulta oficial falló; salida privada omitida')
     return result.stdout
@@ -219,5 +222,7 @@ def launch_tool(manager,args,resume=False):
                           'credentials':'existing installation, unchanged'},indent=2));return 0
     print(colored(SINGLE_TOOLS[provider][0],provider)+' · cuenta actual · '+str(Path.cwd()),flush=True)
     manager.record_launch({'provider':provider,'account':'current'},Path.cwd())
-    result=subprocess.run(command,cwd=Path.cwd())
+    env=dict(os.environ)
+    if args.provider=='agy':env['AGY_CLI_DISABLE_AUTO_UPDATE']='1'
+    result=subprocess.run(command,cwd=Path.cwd(),env=env)
     return result.returncode if result.returncode>=0 else 128-result.returncode
