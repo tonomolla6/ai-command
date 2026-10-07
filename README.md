@@ -115,6 +115,8 @@ ai usage                    # consulta en paralelo; caché de 120 segundos
 ai usage --refresh          # consulta fresca de todas las cuentas activas
 ai usage --cached           # sólo caché local
 ai usage --json             # datos estructurados para tus scripts
+ai usage codex              # sólo Codex; también claude, agy u opencode
+ai usage agy --refresh      # consultar únicamente AGY de nuevo
 ai usage --layout stacked   # tarjetas verticales para terminales estrechas
 ```
 

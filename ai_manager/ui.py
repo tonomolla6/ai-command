@@ -191,7 +191,7 @@ def usage_card(account,row,width,reset,age):
 
 def render_usage(accounts,rows,reset,age,layout='auto'):
     width=max(40,shutil.get_terminal_size(fallback=(120,24)).columns)
-    columns=layout=='columns' or (layout=='auto' and width>=108)
+    columns=(layout=='columns' or (layout=='auto' and width>=108)) and len({a['provider'] for a in accounts})>1
     print(colored('AI USAGE','title')+'  '+colored('disponibilidad · sin turnos al modelo','muted'))
     def group(provider,card_width):
         title={'codex':'OPENAI / CODEX','claude':'ANTHROPIC / CLAUDE','agy':'AGY / ANTIGRAVITY','opencode':'OPENCODE / FREE'}[provider]

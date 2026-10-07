@@ -60,7 +60,8 @@ def format_reset(window):
 
 def limits(manager,args):
     entries=manager.cache().get("accounts",{})
-    accounts=manager.accounts()+current_tools(manager)
+    provider=getattr(args,'provider',None)
+    accounts=manager.accounts(provider)+[a for a in current_tools(manager) if provider is None or a['provider']==provider]
     if not args.cached:
         pending=[a for a in accounts if args.refresh or cached_age(entries.get(manager.key(a),{})) is None or
                  cached_age(entries.get(manager.key(a),{}))>=120 or
@@ -377,6 +378,7 @@ def parser():
     a=sub.add_parser('accounts');a.add_argument('--json',action='store_true');a.add_argument('--all',action='store_true')
     for name in ('limits','usage'):
         a=sub.add_parser(name);group=a.add_mutually_exclusive_group();group.add_argument('--refresh',action='store_true');group.add_argument('--cached',action='store_true');a.add_argument('--json',action='store_true');a.add_argument('--color',choices=['auto','always','never'],default='auto')
+        a.add_argument('provider',nargs='?',choices=['codex','claude',*SINGLE_TOOLS],help='Consultar sólo este proveedor')
         a.add_argument('--layout',choices=['auto','columns','stacked'],default='auto')
     a=sub.add_parser('add',help='Alta rápida por correo');a.add_argument('provider',choices=['codex','claude']);a.add_argument('email');a.add_argument('--id',dest='number');a.add_argument('--home')
     for name in ('enable','disable'):
