@@ -52,6 +52,25 @@ class NativeUpdateTests(unittest.TestCase):
         self.assertEqual(self.binary.stat().st_mode & 0o777,0o755)
         self.assertEqual(sibling.read_text(),'managed launcher');self.assertEqual(auth.read_text(),'private fixture')
 
+    def test_codex_update_installs_matching_companion_beside_cli(self):
+        binary=self.root/'codex';binary.write_bytes(b'old codex');binary.chmod(0o755)
+        companion=self.root/'codex-code-mode-host';companion.write_bytes(b'old helper');companion.chmod(0o755)
+        plan={'provider':'codex','path':binary,'binary':binary,'native':True,
+              'companions':[companion]}
+        blob=archive('codex-platform',b'new codex')
+        helper_blob=archive('codex-code-mode-host-platform',b'new helper')
+        helper={'version':'2.0.1','url':'https://example.com/helper.tgz',
+                'binary':'codex-code-mode-host-platform','target':'codex-code-mode-host',
+                'algorithm':'sha256','digest':hashlib.sha256(helper_blob).hexdigest()}
+        asset={'version':'2.0.1','url':'https://example.com/codex.tgz','binary':'codex-platform',
+               'algorithm':'sha256','digest':hashlib.sha256(blob).hexdigest(),'companions':[helper]}
+        with patch('ai_manager.native_updates.release_asset',return_value=asset), \
+             patch('ai_manager.native_updates.download',side_effect=[blob,helper_blob]), \
+             patch('ai_manager.native_updates.subprocess.run',return_value=subprocess.CompletedProcess([],0,'2.0.1','')):
+            install_native(plan,'2.0.0',{})
+        self.assertEqual(binary.read_bytes(),b'new codex')
+        self.assertEqual(companion.read_bytes(),b'new helper')
+
     def test_wrong_checksum_and_wrong_version_keep_existing_code(self):
         with patch('ai_manager.native_updates.release_asset',return_value=self.asset), \
              patch('ai_manager.native_updates.download',return_value=b'corrupted'):
