@@ -24,6 +24,10 @@ MARKER='# ai-command provider maintenance v1'
 FLOOR=15*1024**3
 
 
+class InsufficientSpace(ManagerError):
+    pass
+
+
 def update_plan(provider):
     binary=Path(executable(provider)).resolve()
     if provider in PACKAGES:
@@ -35,7 +39,10 @@ def update_plan(provider):
             return {'provider':provider,'path':package,'binary':binary,
                     'command':[npm,'install','--global','--prefix',str(modules.parent.parent),
                                PACKAGES[provider]+'@latest','--no-audit','--no-fund']}
-        if provider=='codex':raise ManagerError('Codex sin instalador oficial compatible detectado')
+    with binary.open('rb') as stream:native=stream.read(4)==b'\x7fELF'
+    if provider in ('codex','claude','opencode') and native:
+        return {'provider':provider,'path':binary,'binary':binary,'native':True}
+    if provider in PACKAGES:raise ManagerError('Instalación nativa no verificable')
     command=[str(binary),'update'] if provider in ('claude','agy') else [str(binary),'--pure','upgrade']
     return {'provider':provider,'path':binary,'binary':binary,'command':command}
 
@@ -83,7 +90,7 @@ def snapshot(manager,plan,version):
         with path.open('rb') as stream:
             while chunk:=stream.read(1024*1024):digest.update(chunk)
     if shutil.disk_usage(source.parent).free < FLOOR+3*size+64*1024**2:
-        raise ManagerError('Espacio reservado insuficiente')
+        raise InsufficientSpace('Espacio reservado insuficiente')
     backups=private_dir(manager.home/'.ai-manager/backups/provider-updates')
     identity=plan['provider']+'-'+version+'-'+digest.hexdigest()[:16]
     destination=backups/identity
@@ -141,16 +148,24 @@ def run_updates(manager,check=False):
                 if check:row['status']='READY';rows.append(row);continue
                 archive=snapshot(manager,plan,before)
                 original=plan['path'].stat()
-                result=subprocess.run(plan['command'],stdin=subprocess.DEVNULL,capture_output=True,
-                                      env=environment(provider),timeout=600)
+                if plan.get('native'):
+                    from .native_updates import install_native
+                    install_native(plan,before,environment(provider))
+                    returncode=0
+                else:
+                    result=subprocess.run(plan['command'],stdin=subprocess.DEVNULL,capture_output=True,
+                                          env=environment(provider),timeout=600)
+                    returncode=result.returncode
                 # Retain native executables' access mode on shared installations.
                 if plan['path'].is_file():
                     plan['path'].chmod(original.st_mode & 0o777)
                     if os.getuid()==0:os.chown(plan['path'],original.st_uid,original.st_gid)
                 after=current_version(plan)
-                if result.returncode or not after:raise ManagerError('Falló el actualizador oficial')
+                if returncode or not after:raise ManagerError('Falló el actualizador oficial')
                 row.update(status='UPDATED' if after!=before else 'CURRENT',after=after,backup=str(archive))
-            except (ManagerError,OSError,subprocess.SubprocessError,tarfile.TarError):
+            except InsufficientSpace:
+                row.update(status='SKIPPED_SPACE',reason='Reserva de 15 GiB y espacio de actualización insuficiente')
+            except (ManagerError,OSError,ValueError,KeyError,subprocess.SubprocessError,tarfile.TarError):
                 row['status']='ERROR'
                 if archive and plan:
                     try:

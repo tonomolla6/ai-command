@@ -433,7 +433,8 @@ def main(argv=None):
             if args.json:print(json.dumps({'providers':rows},indent=2))
             else:
                 for row in rows:print(row['provider']+': '+row['status']+' · '+str(row.get('before',''))+
-                                      (' → '+row['after'] if row.get('after') else ''))
+                                      (' → '+row['after'] if row.get('after') else '')+
+                                      (' · '+row['reason'] if row.get('reason') else ''))
             return int(any(row['status'] in ('ERROR','RESTORED','RECOVERY_NEEDED') for row in rows))
         if args.command=='vscode-install':
             from .vscode import install_extensions

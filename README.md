@@ -251,12 +251,17 @@ ai providers-update --cron status
 sudo ai providers-update --cron off
 ```
 
-La tarea ejecuta los instaladores oficiales detectados: npm para las instalaciones
-globales de Codex/Claude, `agy update` y `opencode upgrade`. Aplaza un proveedor si
+La tarea usa npm para las instalaciones globales de Codex/Claude, `agy update`
+y `opencode upgrade` para las instalaciones restantes. Para binarios Linux
+independientes de Codex, Claude y OpenCode descarga la distribución oficial,
+verifica su checksum y la versión, y sustituye únicamente el ejecutable nativo.
+Admite x86_64 y ARM64 sin instalar Node/npm. Aplaza un proveedor si
 tiene procesos activos, usa un lock y conserva backups privados sólo del código,
 deduplicados por contenido. Comprueba la versión posterior y restaura el código
 anterior si falla la actualización. No toca credenciales, conversaciones ni planes.
 Reserva al menos 15 GiB libres y espacio adicional para cada actualización.
+Si no hay espacio suficiente, muestra `SKIPPED_SPACE` y vuelve a intentarlo en
+la siguiente ejecución; nunca borra datos para hacer sitio.
 
 Los registros están bajo `/var/log/ai-command/`, accesibles sólo por root y con
 rotación. No guardan la salida bruta del instalador ni envían correo. Puedes revisar
