@@ -103,6 +103,20 @@ class AutomaticTests(unittest.TestCase):
         entries['codex:1']['windows'][0]['available_percent'] = 40
         self.assertEqual(select_account(self.manager, 'codex', entries), self.first)
 
+    def test_low_priority_is_last_resort_even_with_earlier_reset(self):
+        self.first['priority'] = 'low'
+        reference = dt.datetime.now(dt.timezone.utc)
+        entries = {'codex:1': quota(self.first, 95, 95),
+                   'codex:2': quota(self.second, 20, 30)}
+        for key, hours in [('codex:1', 1), ('codex:2', 4)]:
+            entries[key]['windows'][0]['reset_at'] = (reference + dt.timedelta(hours=hours)).isoformat()
+        self.assertEqual(select_account(self.manager, 'codex', entries), self.second)
+        entries['codex:2']['windows'][1]['available_percent'] = 0
+        self.assertEqual(select_account(self.manager, 'codex', entries), self.first)
+        entries['codex:1']['windows'][0]['available_percent'] = 0
+        with self.assertRaises(ManagerError):
+            select_account(self.manager, 'codex', entries)
+
     def test_reserved_free_account_never_enters_general_automatic_rotation(self):
         self.first.update(automatic=False,fixed_model='gpt-6-luna',plan_label='Free')
         entries={'codex:1':quota(self.first,100,100),'codex:2':quota(self.second,30,40)}
