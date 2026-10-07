@@ -102,6 +102,8 @@ usa `ai add codex TU_CORREO --id 1 --home ~/.codex` o su equivalente para Claude
 | Reservar una cuenta para un modelo verificado | `ai policy codex 1 --model MODELO --auto off` |
 | Dejar una cuenta como última opción automática | `ai priority codex 2 low` |
 | Recuperar su prioridad habitual | `ai priority codex 2 normal` |
+| Elegir una cuenta sólo para este lanzamiento | `ACCOUNT=codex2 codex`, `ACCOUNT=claude2 claude` |
+| Reanudar un ID con una cuenta concreta | `ACCOUNT=codex2 codex resume ID` |
 | Usar el login actual de AGY / OpenCode | `ai agy`, `ai opencode` |
 
 También se crean `claude2`, `codex2` y sus variantes terminadas en `r`.

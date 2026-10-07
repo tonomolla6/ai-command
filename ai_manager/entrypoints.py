@@ -1,10 +1,12 @@
 """Bare interactive provider commands use ai; native arguments pass through."""
 import os
 import sys
+import json
 
 from .core import Manager, ManagerError
 from .providers import executable
 from .permissions import claude_arguments, claude_danger_enabled, is_claude_launch, single_tool_arguments
+from .automatic import account_override
 
 
 def single_provider_main(provider, argv=None):
@@ -33,6 +35,33 @@ def provider_main(provider, argv=None):
     try:
         if not managed:
             path = executable(provider)
+            admin = {'login','logout','app-server','mcp','mcp-server','completion','features',
+                     'debug','help','update','upgrade','install','doctor','auth','plugin','plugins'}
+            launch = is_claude_launch(argv) if provider=='claude' else (
+                not any(arg in ('--version','-V','--help','-h') for arg in argv)
+                and (not argv or argv[0] not in admin))
+            manager=Manager() if os.environ.get('ACCOUNT','').strip() and launch else None
+            account=account_override(manager,provider) if manager else None
+            if account:
+                from .registry import sync_identity, fixed_model_arguments
+                if not manager.has_auth(account):
+                    raise ManagerError(f"{account['label']} necesita login: ai login {provider} {account['account']}")
+                if not sync_identity(manager,account):
+                    raise ManagerError('No se pudo verificar la identidad de ACCOUNT')
+                env=manager.env(account);env.pop('ACCOUNT',None)
+                env['AI_MANAGER_BOUND_PROVIDER']=provider
+                if provider=='codex':
+                    options=['--no-daemon']
+                    if account.get('shared_sqlite_home'):
+                        options+=['-c','sqlite_home='+json.dumps(account['shared_sqlite_home'])]
+                    os.execve(path,[path,*options,*fixed_model_arguments(account,argv),*argv],env)
+                else:
+                    from .claude_setup import repair_onboarding
+                    repair_onboarding(manager,account)
+                    if claude_danger_enabled(manager):
+                        env['IS_SANDBOX']='1';argv=claude_arguments(argv)
+                    os.execve(path,[path,*argv],env)
+                return 0
             if provider == 'claude' and is_claude_launch(argv) and claude_danger_enabled():
                 env = dict(os.environ);env['IS_SANDBOX'] = '1'
                 os.execve(path, [path, *claude_arguments(argv)], env)

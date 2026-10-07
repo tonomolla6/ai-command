@@ -15,7 +15,7 @@ import sys
 import time
 
 from .core import Manager, ManagerError, now, public_text, safe_file, read_json, backup_files
-from .automatic import refresh_accounts, select_account, quota_score, quota_expiry, collect_limits
+from .automatic import refresh_accounts, select_account, quota_score, quota_expiry, collect_limits, account_override
 from .handoff import handoff, handoff_prompt
 from .providers import AUTO_WRAPPER_MARKER, auth_status, executable, version
 from .sessions import list_sessions, prepare_resume, session_lock_name
@@ -180,7 +180,7 @@ def launch(manager,args,resume=False,session=None):
         print(colored(account['label'],account['provider'])+' · '+colored(account.get('email') or 'correo pendiente','bold')+
               f" · {cwd}"+(f" · resume {session['id']}" if session else ""),flush=True)
         # Same foreground process group/terminal so Ctrl+C/Ctrl+D retain CLI semantics.
-        env=manager.env(account);env['AI_MANAGER_BOUND_PROVIDER']=account['provider']
+        env=manager.env(account);env.pop('ACCOUNT',None);env['AI_MANAGER_BOUND_PROVIDER']=account['provider']
         if danger:env['IS_SANDBOX']='1'
         try:result=subprocess.run(command,env=env,cwd=cwd)
         except KeyboardInterrupt:return 130
@@ -197,10 +197,15 @@ def launch(manager,args,resume=False,session=None):
 def auto_launch(manager,args):
     if not args.dry_run and (not sys.stdin.isatty() or not sys.stdout.isatty()):
         raise ManagerError('La selección automática interactiva necesita TTY; usa --dry-run para inspeccionar')
-    print(colored(f'AI AUTO · consultando cuotas oficiales de {args.provider}…','title'),file=sys.stderr,flush=True)
-    entries=refresh_accounts(manager,args.provider)
-    account=select_account(manager,args.provider,entries)
-    row=entries[manager.key(account)]
+    account=account_override(manager,args.provider)
+    explicit=account is not None
+    if explicit:
+        row={}
+    else:
+        print(colored(f'AI AUTO · consultando cuotas oficiales de {args.provider}…','title'),file=sys.stderr,flush=True)
+        entries=refresh_accounts(manager,args.provider)
+        account=select_account(manager,args.provider,entries)
+        row=entries[manager.key(account)]
     expiry=quota_expiry(row)
     reset=dt.datetime.fromtimestamp(expiry,dt.timezone.utc).isoformat() if expiry is not None else None
     resume_requested=getattr(args,'resume',False) or bool(getattr(args,'session',None))
@@ -211,13 +216,15 @@ def auto_launch(manager,args):
             if session is None:raise ManagerError('ID de conversación principal no encontrado; consulta ai sessions '+args.provider+' --all')
         else:session=selected_session(manager,args.provider,Path.cwd(),getattr(args,'pick',False))
         if session is None:return 0
-    if not args.dry_run:
+    if not args.dry_run and explicit:
+        print(colored('AI ACCOUNT · '+account['label'],args.provider)+' · elección explícita',file=sys.stderr,flush=True)
+    elif not args.dry_run:
         print(colored('✓ '+account['label'],args.provider)+' · '+colored(row['email'],'bold')+
               ' · '+colored(pct(quota_score(row))+' de margen mínimo','ok')+
               ' · '+colored('reinicio '+format_reset({'reset_at':reset}) if reset else 'reset UNKNOWN; prioridad por margen','low')+
               ' · '+('retomando conversación' if session else 'conversación nueva'),file=sys.stderr,flush=True)
     selected=argparse.Namespace(provider=args.provider,account=account['account'],dry_run=args.dry_run,
-                                pick=False,extra=args.extra,automatic=True,auto_reset=reset)
+                                pick=False,extra=args.extra,automatic=not explicit,auto_reset=reset)
     return launch(manager,selected,resume=session is not None,session=session)
 
 

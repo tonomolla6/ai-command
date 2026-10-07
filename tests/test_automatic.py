@@ -11,7 +11,7 @@ import threading
 import unittest
 from unittest.mock import patch
 
-from ai_manager.automatic import refresh_accounts, select_account, quota_expiry, collect_limits
+from ai_manager.automatic import refresh_accounts, select_account, quota_expiry, collect_limits, account_override
 from ai_manager.cli import auto_launch
 from ai_manager.core import Manager, ManagerError, now, write_json
 from ai_manager.entrypoints import provider_main
@@ -116,6 +116,61 @@ class AutomaticTests(unittest.TestCase):
         entries['codex:1']['windows'][0]['available_percent'] = 0
         with self.assertRaises(ManagerError):
             select_account(self.manager, 'codex', entries)
+
+    def test_account_environment_resolves_registered_aliases_and_rejects_wrong_provider(self):
+        for value in ('codex2','x2','2',self.second['email']):
+            with self.subTest(value=value),patch.dict(os.environ,{'ACCOUNT':value}):
+                self.assertEqual(account_override(self.manager,'codex'),self.second)
+        for value in ('claude2','c2','codex4','x999','../../auth.json'):
+            with self.subTest(value=value),patch.dict(os.environ,{'ACCOUNT':value}),self.assertRaises(ManagerError):
+                account_override(self.manager,'codex')
+        with patch.dict(os.environ,{'ACCOUNT':'c2'}):
+            self.assertEqual(account_override(self.manager,'claude')['account'],'2')
+
+    def test_account_override_skips_quotas_and_preserves_explicit_resume(self):
+        self.second['automatic']=False
+        self.second['priority']='low'
+        session={'id':'requested-thread','origin_account':'1','updated':1}
+        for resume in (False,True):
+            args=argparse.Namespace(provider='codex',new=not resume,resume=resume,
+                                   session='requested-thread' if resume else None,dry_run=True,extra=[])
+            with patch.dict(os.environ,{'ACCOUNT':'codex2'}), \
+                 patch('ai_manager.cli.refresh_accounts') as refresh, \
+                 patch('ai_manager.cli.list_sessions',return_value=[session]), \
+                 patch('ai_manager.cli.launch',return_value=0) as launch:
+                self.assertEqual(auto_launch(self.manager,args),0)
+            refresh.assert_not_called()
+            selected=launch.call_args.args[1]
+            self.assertEqual(selected.account,'2')
+            self.assertFalse(selected.automatic)
+            self.assertEqual(launch.call_args.kwargs['session'],session if resume else None)
+
+    def test_account_native_print_binds_home_and_enforces_claude_permissions(self):
+        account=self.manager.account('claude','2')
+        with patch.dict(os.environ,{'ACCOUNT':'claude2'}), \
+             patch('ai_manager.entrypoints.Manager',return_value=self.manager), \
+             patch('ai_manager.entrypoints.executable',return_value='/original/claude'), \
+             patch('ai_manager.registry.sync_identity',return_value=account['email']), \
+             patch('ai_manager.claude_setup.repair_onboarding'), \
+             patch('ai_manager.entrypoints.os.execve') as run:
+            self.assertEqual(provider_main('claude',['-p','test prompt']),0)
+        env=run.call_args.args[2];arguments=run.call_args.args[1]
+        self.assertEqual(env['CLAUDE_CONFIG_DIR'],account['home'])
+        self.assertEqual(env['IS_SANDBOX'],'1')
+        self.assertNotIn('ACCOUNT',env)
+        self.assertEqual(arguments[-2:],['-p','test prompt'])
+        self.assertIn('--dangerously-skip-permissions',arguments)
+
+    def test_account_native_exec_binds_codex_home_and_preserves_arguments(self):
+        with patch.dict(os.environ,{'ACCOUNT':'x2'}), \
+             patch('ai_manager.entrypoints.Manager',return_value=self.manager), \
+             patch('ai_manager.entrypoints.executable',return_value='/original/codex'), \
+             patch('ai_manager.registry.sync_identity',return_value=self.second['email']), \
+             patch('ai_manager.entrypoints.os.execve') as run:
+            self.assertEqual(provider_main('codex',['exec','test prompt']),0)
+        self.assertEqual(run.call_args.args[2]['CODEX_HOME'],self.second['home'])
+        self.assertIn('--no-daemon',run.call_args.args[1])
+        self.assertEqual(run.call_args.args[1][-2:],['exec','test prompt'])
 
     def test_reserved_free_account_never_enters_general_automatic_rotation(self):
         self.first.update(automatic=False,fixed_model='gpt-6-luna',plan_label='Free')

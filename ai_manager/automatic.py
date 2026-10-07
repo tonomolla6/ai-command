@@ -2,9 +2,28 @@
 from concurrent.futures import ThreadPoolExecutor
 import datetime as dt
 import math
+import os
+import re
 
 from .core import ManagerError
 from .providers import query_limits
+
+
+def account_override(manager, provider):
+    """Resolve an invocation-only choice without consulting or rotating quotas."""
+    value = os.environ.get('ACCOUNT', '').strip()
+    if not value:
+        return None
+    match = re.fullmatch(r'(codex|claude|x|c)([1-9][0-9]*)', value, re.I)
+    if match:
+        selected_provider = 'codex' if match[1].lower() in ('codex', 'x') else 'claude'
+        if selected_provider != provider:
+            raise ManagerError('ACCOUNT pertenece a otro proveedor; usa codexN/xN o claudeN/cN según el comando')
+        value = match[2]
+    elif not (re.fullmatch(r'[1-9][0-9]*', value) or
+              re.fullmatch(r'[^\s<>@]+@[^\s<>@]+\.[^\s<>@]+', value)):
+        raise ManagerError('ACCOUNT debe ser codexN/xN, claudeN/cN, un número o un correo registrado')
+    return manager.account(provider, value)
 
 
 def quota_score(entry):
