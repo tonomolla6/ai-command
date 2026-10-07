@@ -157,7 +157,7 @@ El gestor añade `.ai/` al ignore local del repositorio.
 Si el proveedor rechaza reanudar entre cuentas, el gestor informa y ofrece un
 selector o handoff. No convierte bases de conversaciones entre proveedores.
 
-## Permisos de Claude
+## Permisos de ejecución
 
 Una instalación nueva conserva los permisos normales de Claude. Si deseas que
 **todos sus lanzamientos gestionados**, incluidos `--resume`, `-r`, `--continue`
@@ -173,6 +173,34 @@ Activado, pasa `IS_SANDBOX=1`, `--dangerously-skip-permissions` y
 `--permission-mode bypassPermissions` al proceso hijo. No cambia permisos de Linux,
 políticas de organización ni reglas deny del proveedor. Las consultas de cuotas
 separadas del gestor no reciben estos flags.
+
+AGY y OpenCode también tienen una política explícita, desactivada por defecto:
+
+```bash
+ai configure --agy-danger on --opencode-danger on
+ai agy                      # --dangerously-skip-permissions
+ai resume agy               # mismo modo al reanudar
+ai opencode                 # --auto
+ai resume opencode          # mismo modo al reanudar
+```
+
+OpenCode `--auto` aprueba solicitudes que pedirían confirmación y mantiene las
+reglas `deny` explícitas del proveedor, proyecto y agente. Son las opciones
+oficiales verificadas en AGY 1.3.1 y OpenCode 1.18.35.
+
+Para aplicar la misma política a los comandos directos en Bash, sin mover los
+ejecutables ni alterar sus actualizaciones nativas:
+
+```bash
+ai install --shell          # bloque gestionado en .bashrc, con backup
+source ~/.bashrc            # sólo para cargarlo en la terminal ya abierta
+agy
+opencode --continue
+```
+
+Las funciones pasan los argumentos nativos a `ai native`; no seleccionan modelos
+ni cuentas. Las consultas internas de cuotas usan el ejecutable original y no
+reciben el flag. Usa `--agy-danger off` o `--opencode-danger off` para desactivarlo.
 
 ## Actualizaciones y servidores
 

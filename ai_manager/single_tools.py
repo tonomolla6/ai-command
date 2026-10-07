@@ -186,6 +186,7 @@ def list_tool_sessions(manager,provider,cwd):
 
 
 def launch_tool(manager,args,resume=False):
+    from .permissions import single_tool_arguments
     provider=args.provider
     if not args.dry_run and (not sys.stdin.isatty() or not sys.stdout.isatty()):
         raise ManagerError('Abrir una sesión necesita TTY; usa --dry-run para inspeccionar')
@@ -217,6 +218,7 @@ def launch_tool(manager,args,resume=False):
     prompt=handoff_prompt(manager,Path.cwd())
     if prompt:command.extend(['--prompt' if provider=='opencode' else '--prompt-interactive',prompt])
     command.extend(extras)
+    command=[command[0], *single_tool_arguments(manager,provider,command[1:])]
     if args.dry_run:
         print(json.dumps({'command':command,'cwd':str(Path.cwd()),'account':'current',
                           'credentials':'existing installation, unchanged'},indent=2));return 0

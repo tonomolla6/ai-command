@@ -183,3 +183,33 @@ def install_auto_commands(source, bin_dir):
         if not target.exists():
             atomic_write(target, content, 0o755)
         print(f'Auto: {target}; original: {original}')
+
+
+def install_native_shell(manager):
+    """Expose the per-user policy in Bash without moving/updating native binaries."""
+    import shlex
+    import subprocess
+    start='# >>> ai-command native tools >>>'
+    end='# <<< ai-command native tools <<<'
+    ai=shlex.quote(str(Path(manager.command_bin())/'ai'))
+    block=(start+'\n'
+           'unalias agy opencode 2>/dev/null || true\n'
+           'function agy { command '+ai+' native agy -- "$@"; }\n'
+           'function opencode { command '+ai+' native opencode -- "$@"; }\n'+end+'\n')
+    path=manager.home/'.bashrc'
+    with manager.lock('shell',timeout=15):
+        if path.is_symlink():raise ManagerError('Se conserva .bashrc enlazado; prepara la integración manualmente')
+        original=path.read_text() if path.exists() else ''
+        if original.count(start)!=original.count(end) or original.count(start)>1:
+            raise ManagerError('Bloque shell ambiguo; .bashrc se conserva')
+        if start in original:
+            begin=original.index(start);finish=original.index(end)+len(end)
+            if finish<len(original) and original[finish]=='\n':finish+=1
+            candidate=original[:begin]+block+original[finish:]
+        else:candidate=original+('' if not original or original.endswith('\n') else '\n')+'\n'+block
+        if candidate!=original:
+            result=subprocess.run(['bash','-n'],input=candidate,text=True,capture_output=True)
+            if result.returncode:raise ManagerError('La sintaxis de .bashrc no permite integrar los comandos; se conserva')
+            backup_files(manager.home,[path],'Install explicitly requested Bash native tool integration')
+            atomic_write(path,candidate,path.stat().st_mode & 0o777 if path.exists() else 0o600)
+    print('agy/opencode preparados en Bash. Terminal actual: source ~/.bashrc')

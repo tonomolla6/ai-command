@@ -2,9 +2,23 @@
 import os
 import sys
 
-from .core import ManagerError
+from .core import Manager, ManagerError
 from .providers import executable
-from .permissions import claude_arguments, claude_danger_enabled, is_claude_launch
+from .permissions import claude_arguments, claude_danger_enabled, is_claude_launch, single_tool_arguments
+
+
+def single_provider_main(provider, argv=None):
+    """Pass native arguments through, adding only an explicitly enabled policy."""
+    argv=list(sys.argv[1:] if argv is None else argv)
+    try:
+        path=executable(provider)
+        arguments=single_tool_arguments(Manager(),provider,argv)
+        env=dict(os.environ)
+        if provider=='agy':env['AGY_CLI_DISABLE_AUTO_UPDATE']='1'
+        os.execve(path,[path,*arguments],env)
+    except (ManagerError,OSError):
+        print('ai: no se pudo ejecutar el CLI original de '+provider+'.',file=sys.stderr)
+        return 1
 
 
 def provider_main(provider, argv=None):

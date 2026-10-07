@@ -55,5 +55,11 @@ Activada aplica IS_SANDBOX=1, --dangerously-skip-permissions y bypassPermissions
 a nuevos lanzamientos y resume. Comprueba modo efectivo con un proceso propio;
 no escribas en TTYs de otra sesión ni eludas políticas del proveedor.
 
+AGY y OpenCode usan `ai configure --agy-danger on/off` y
+`--opencode-danger on/off`. AGY recibe --dangerously-skip-permissions; OpenCode
+recibe --auto y conserva los deny explícitos. Se aplica al abrir y reanudar.
+`ai install --shell` prepara funciones Bash para los comandos directos sin mover
+los binarios nativos; cargar `source ~/.bashrc` en una terminal que ya estaba abierta.
+
 Cierra con el comando exacto de login pendiente, validación real y límites de lo
 probado. No describas un dry-run como una continuación autenticada comprobada.

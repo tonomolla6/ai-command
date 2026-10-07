@@ -359,11 +359,16 @@ def parser():
     a=sub.add_parser('update',help='Actualizar el gestor desde la última release estable')
     mode=a.add_mutually_exclusive_group();mode.add_argument('--check',action='store_true');mode.add_argument('--rollback',action='store_true');mode.add_argument('--list',action='store_true');mode.add_argument('--to',metavar='vX.Y.Z')
     a=sub.add_parser('migrate',help='Aplicar migraciones privadas de configuración');a.add_argument('--dry-run',action='store_true')
-    a=sub.add_parser('configure',help='Preferencias del gestor');a.add_argument('--claude-danger',choices=['on','off'],required=True)
+    a=sub.add_parser('configure',help='Preferencias del gestor')
+    for provider in ('claude','agy','opencode'):a.add_argument('--'+provider+'-danger',choices=['on','off'])
+    a=sub.add_parser('native',help='CLI original de AGY/OpenCode con tu política de permisos')
+    a.add_argument('provider',choices=list(SINGLE_TOOLS))
+    a.add_argument('arguments',nargs=argparse.REMAINDER)
     sub.add_parser('vscode-install',help='Instalar extensiones de agentes/terminales para este usuario SSH')
     install=sub.add_parser('install',help='Instalar comandos en PATH');install.add_argument('--bin-dir',default=Manager().command_bin())
     install.add_argument('--auto',action='store_true',help='Instalar también codex/claude automáticos en ~/.local/bin')
     install.add_argument('--auto-bin-dir',default=str(Path.home()/'.local/bin'))
+    install.add_argument('--shell',action='store_true',help='Preparar agy/opencode directos en Bash conservando los binarios')
     a=sub.add_parser('auto',help='Elegir cuenta por cuota fresca; resume sólo si se pide')
     a.add_argument('provider',choices=['codex','claude'])
     mode=a.add_mutually_exclusive_group();mode.add_argument('--new',action='store_true');mode.add_argument('--resume',action='store_true')
@@ -425,18 +430,29 @@ def main(argv=None):
             return 0
         if args.command=='install':
             source=Path(__file__).resolve().parent.parent
-            install_commands(source,args.bin_dir,manager.accounts(include_inactive=True) or None)
+            if args.shell:
+                from .setup import install_native_shell
+                install_native_shell(manager)
+            else:install_commands(source,args.bin_dir,manager.accounts(include_inactive=True) or None)
             if args.auto:install_auto_commands(source,args.auto_bin_dir)
             return 0
+        if args.command=='native':
+            from .entrypoints import single_provider_main
+            arguments=args.arguments[1:] if args.arguments[:1]==['--'] else args.arguments
+            return single_provider_main(args.provider,arguments)
         migrate(manager)
         manager.require_setup()
         if args.command=='configure':
+            policies={provider:getattr(args,provider+'_danger') for provider in ('claude','agy','opencode')
+                      if getattr(args,provider+'_danger') is not None}
+            if not policies:raise ManagerError('Elige --claude-danger, --agy-danger o --opencode-danger on/off')
             with manager.lock('registry',timeout=15):
-                backup_files(manager.home,[manager.config_path],'Change explicit Claude permission policy')
+                backup_files(manager.home,[manager.config_path],'Change explicit provider permission policies')
                 manager.config=read_json(manager.config_path)
-                manager.config['claude_skip_permissions']=args.claude_danger=='on'
+                for provider,value in policies.items():manager.config[provider+'_skip_permissions']=value=='on'
                 write_json(manager.config_path,manager.config)
-            print('Claude bypassPermissions: '+args.claude_danger+' · aplica a nuevos lanzamientos y resume')
+            for provider,value in policies.items():
+                print(provider+' auto-approve: '+value+' · aplica a nuevos lanzamientos y resume')
             return 0
         if args.command=='activity':
             activity=local_activity(manager)
