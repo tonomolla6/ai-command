@@ -199,10 +199,10 @@ def usage_card(account,row,width,reset,age):
     return result
 
 
-def render_usage(accounts,rows,reset,age,layout='auto'):
+def usage_lines(accounts,rows,reset,age,layout='auto'):
     width=max(40,shutil.get_terminal_size(fallback=(120,24)).columns)
     columns=(layout=='columns' or (layout=='auto' and width>=108)) and len({a['provider'] for a in accounts})>1
-    print(colored('AI USAGE','title')+'  '+colored('disponibilidad · sin turnos al modelo','muted'))
+    output=[colored('AI USAGE','title')+'  '+colored('disponibilidad · sin turnos al modelo','muted')]
     def group(provider,card_width):
         title={'codex':'OPENAI / CODEX','claude':'ANTHROPIC / CLAUDE','agy':'AGY / ANTIGRAVITY','opencode':'OPENCODE / FREE'}[provider]
         if not any(a['provider']==provider for a in accounts):return []
@@ -215,8 +215,13 @@ def render_usage(accounts,rows,reset,age,layout='auto'):
         card_width=(width-6)//3
         third=group('agy',card_width)+group('opencode',card_width)
         for left,middle,right in zip_longest(group('codex',card_width),group('claude',card_width),third,fillvalue=''):
-            print(fit(left,card_width)+'   '+fit(middle,card_width)+'   '+right)
+            output.append(fit(left,card_width)+'   '+fit(middle,card_width)+'   '+right)
     else:
         for provider in ('codex','claude','agy','opencode'):
-            for line in group(provider,width):print(line)
-    print(colored('✓ correo verificado · caché 120s · --refresh actualiza','muted'))
+            output.extend(group(provider,width))
+    output.append(colored('✓ correo verificado · caché 120s · --refresh actualiza','muted'))
+    return output
+
+
+def render_usage(accounts,rows,reset,age,layout='auto'):
+    print('\n'.join(usage_lines(accounts,rows,reset,age,layout)))
