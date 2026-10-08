@@ -13,7 +13,7 @@ class Tmux {
 
   async run(args, allowMissing = false) {
     try {
-      const { stdout } = await execute('/usr/bin/tmux', args, {
+      const { stdout } = await execute('tmux', args, {
         env: this.env, timeout: 3000, maxBuffer: 1024 * 1024,
       });
       return stdout.trimEnd();

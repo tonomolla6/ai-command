@@ -10,19 +10,30 @@ const execute = promisify(execFile);
 const LIMIT = 2 * 1024 * 1024;
 
 async function tmux(args) {
-  const {stdout} = await execute('/usr/bin/tmux', args, {timeout:2000,maxBuffer:LIMIT,
+  const {stdout} = await execute('tmux', args, {timeout:2000,maxBuffer:LIMIT,
     env:{...process.env,TMUX:'',TMUX_PANE:''}});
   return stdout.trimEnd();
 }
 
-async function findAgents(pid, depth = 0) {
-  if (depth > 4) return [];
+async function findAgents(pid, depth = 0, procRoot = '/proc') {
+  if (depth > 8) return [];
   try {
-    const comm = (await fs.readFile(`/proc/${pid}/comm`,'utf8')).trim();
-    if (['codex','claude'].includes(comm)) return [{pid:Number(pid),engine:comm}]; // Stop before subagents.
-    if (depth && !['bash','node','MainThread','sh','env'].includes(comm) && !comm.startsWith('python')) return [];
-    const children = (await fs.readFile(`/proc/${pid}/task/${pid}/children`,'utf8')).trim().split(/\s+/).filter(Boolean);
-    return (await Promise.all(children.map(child => findAgents(child, depth+1)))).flat();
+    const base=nodePath.join(procRoot,String(pid));
+    const comm = (await fs.readFile(nodePath.join(base,'comm'),'utf8')).trim();
+    const exe=nodePath.basename((await fs.readlink(nodePath.join(base,'exe'))).replace(/ \(deleted\)$/,''));
+    if (['codex','claude'].includes(comm) && [comm,comm+'.exe'].includes(exe)) {
+      // Launchers can rename themselves to codex while still running Python.
+      // Only the native executable owns the agent state; stop before subagents.
+      const handle=await fs.open(nodePath.join(base,'exe'),'r');
+      let native;
+      try {const header=Buffer.alloc(4);await handle.read(header,0,4,0);native=header.equals(Buffer.from([127,69,76,70]));}
+      finally {await handle.close();}
+      if(native)return [{pid:Number(pid),engine:comm}];
+    }
+    if (depth && !['bash','node','MainThread','sh','env','codex','claude'].includes(comm) &&
+        !comm.startsWith('python') && !exe.startsWith('python')) return [];
+    const children = (await fs.readFile(nodePath.join(base,'task',String(pid),'children'),'utf8')).trim().split(/\s+/).filter(Boolean);
+    return (await Promise.all(children.map(child => findAgents(child, depth+1,procRoot)))).flat();
   } catch { return []; }
 }
 

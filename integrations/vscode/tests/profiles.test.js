@@ -6,7 +6,8 @@ const os=require('node:os');
 const path=require('node:path');
 const {processPaths}=require('../agentes-terminales/process-paths');
 const {readClaude}=require('../agentes-terminales/claude');
-const {findAgents}=require('../agentes-terminales/monitor');
+const {findAgents,Monitor}=require('../agentes-terminales/monitor');
+const {Tmux}=require('../terminales-persistentes/tmux');
 
 test('a renamed Python account launcher is traversed to the native agent',async()=>{
  const root=await fs.mkdtemp(path.join(os.tmpdir(),'ai-process-'));
@@ -19,7 +20,22 @@ test('a renamed Python account launcher is traversed to the native agent',async(
    await fs.writeFile(path.join(dir,'task',String(pid),'children'),children);
   }
   assert.deepEqual(await findAgents(10,0,root),[{pid:11,engine:'codex'}]);
+  await fs.writeFile(path.join(root,'10/comm'),'ai\n');
+  assert.deepEqual(await findAgents(10,1,root),[{pid:11,engine:'codex'}]);
  }finally{await fs.rm(root,{recursive:true});}
+});
+
+test('monitor and persistent terminals use the tmux chosen in PATH',async()=>{
+ const root=await fs.mkdtemp(path.join(os.tmpdir(),'ai-tmux-'));const previous=process.env.PATH;
+ try{
+  const binary=path.join(root,'tmux');
+  const key='a'.repeat(32);
+  await fs.writeFile(binary,'#!'+process.execPath+'\nconsole.log(process.argv.includes("list-panes")?'+
+   JSON.stringify('%1\t99999999\t'+key+'\t\t/home/test')+':"selected-tmux");\n',{mode:0o755});
+  process.env.PATH=root+path.delimiter+previous;
+  const backend=new Tmux(process.env);assert.equal(await backend.run(['-V']),'selected-tmux');
+  const rows=await new Monitor().sample(new Set([key]));assert.equal(rows.get(key).status,'off');
+ }finally{process.env.PATH=previous;await fs.rm(root,{recursive:true});}
 });
 
 test('process paths return only the selected account directories',async()=>{
