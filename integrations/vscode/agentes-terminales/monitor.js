@@ -40,7 +40,7 @@ async function findAgents(pid, depth = 0, procRoot = '/proc') {
     const base=nodePath.join(procRoot,String(pid));
     const comm = (await fs.readFile(nodePath.join(base,'comm'),'utf8')).trim();
     const exe=nodePath.basename((await fs.readlink(nodePath.join(base,'exe'))).replace(/ \(deleted\)$/,''));
-    if (['codex','claude'].includes(comm) && [comm,comm+'.exe'].includes(exe)) {
+    if (['codex','claude','agy','opencode'].includes(comm) && [comm,comm+'.exe'].includes(exe)) {
       // Launchers can rename themselves to codex while still running Python.
       // Only the native executable owns the agent state; stop before subagents.
       const handle=await fs.open(nodePath.join(base,'exe'),'r');
@@ -49,7 +49,7 @@ async function findAgents(pid, depth = 0, procRoot = '/proc') {
       finally {await handle.close();}
       if(native)return [{pid:Number(pid),engine:comm}];
     }
-    if (depth && !['bash','node','MainThread','sh','env','codex','claude'].includes(comm) &&
+    if (depth && !['bash','node','MainThread','sh','env','codex','claude','agy','opencode'].includes(comm) &&
         !comm.startsWith('python') && !exe.startsWith('python')) return [];
     const children = (await fs.readFile(nodePath.join(base,'task',String(pid),'children'),'utf8')).trim().split(/\s+/).filter(Boolean);
     return (await Promise.all(children.map(child => findAgents(child, depth+1,procRoot)))).flat();
@@ -210,6 +210,7 @@ class Monitor {
       }
       let row={...pane,status:agent.pid||agent.ambiguous?'unknown':'off',agentPid:agent.pid,engine:agent.engine};
       if(agent.engine==='claude')row={...row,...await readClaude(agent.pid,this.claudeOptions)};
+      if(['agy','opencode'].includes(agent.engine))row.detail='Proveedor detectado; estado de actividad no confirmado';
       if(agent.path) {
         used.add(agent.path);
         let tail=this.tails.get(agent.path);

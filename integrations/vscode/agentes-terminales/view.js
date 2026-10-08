@@ -1,6 +1,7 @@
 'use strict';
 const { Monitor }=require('./monitor');
 const {NativeLayout}=require('./native-layout');
+const {ProviderIcons,PROVIDERS,providerOf}=require('./provider-icons');
 const LABELS={working:'Trabajando',done:'Terminado',attention:'Necesita atención',unknown:'Estado no confirmado',off:'Sin agente activo'};
 const terminalKeys=new WeakMap();
 let nextTerminal=0;
@@ -27,18 +28,21 @@ function belongsToWorkspace(t,vscode,metadata){
 }
 
 class AgentsView {
-  constructor(vscode,monitor=new Monitor(),report=()=>{},layout) {
+  constructor(vscode,monitor=new Monitor(),report=()=>{},layout,iconRoot) {
     this.vscode=vscode; this.monitor=monitor; this.report=report; this.rows=[]; this.demo=false;
     this.layout=layout||(vscode.env?.appRoot?new NativeLayout(vscode,report):undefined);
+    this.icons=iconRoot?new ProviderIcons(vscode,iconRoot):undefined;
     this.events=new vscode.EventEmitter(); this.onDidChangeTreeData=this.events.event;
   }
   getChildren(){return this.rows;}
   getTreeItem(row){
     const item=new this.vscode.TreeItem(row.name);
-    const engine={codex:'Codex',claude:'Claude'}[row.engine];
-    item.id=row.key; item.description=(engine?engine+' · ':'')+LABELS[row.status];
+    const engine=PROVIDERS[providerOf(row)].label;
+    item.id=row.key; item.description=engine+' · '+LABELS[row.status];
     item.iconPath=new this.vscode.ThemeIcon('circle-filled',new this.vscode.ThemeColor('aiCommandAgents.'+row.status));
-    item.tooltip=row.name+' — '+item.description+(row.split?'\nDividida: '+row.split.join(' · '):'')+(row.detail?'\n'+row.detail:'');
+    try{if(this.icons)item.iconPath=this.icons.icon(row);}catch{/* Keep activity and provider text if icon storage is unavailable. */}
+    item.tooltip=row.name+' — '+item.description+'\nPunto izquierdo: actividad · punto derecho: proveedor'+(row.split?'\nDividida: '+row.split.join(' · '):'')+(row.detail?'\n'+row.detail:'');
+    item.accessibilityInformation={label:row.name+', '+item.description};
     if(row.split)item.label=(row.splitIndex===0?'┌ ':row.splitIndex===row.split.length-1?'└ ':'├ ')+row.name;
     item.contextValue=row.demo?'demo':'agent';
     if(!row.demo)item.command={command:'aiCommandAgents.openTerminal',title:'Abrir terminal',arguments:[row.key]};
@@ -102,7 +106,8 @@ class AgentsView {
   }
   showDemo(){
     this.demo=true;this.signature=undefined;
-    this.rows=['working','done','attention'].map((status,i)=>({key:'demo-'+i,name:['Prueba · trabajando','Prueba · terminado','Prueba · atención'][i],status,demo:true}));
+    this.rows=[['codex','working'],['claude','done'],['agy','attention'],['opencode','unknown'],[undefined,'off'],[undefined,'unknown']]
+      .map(([engine,status],i)=>({key:'demo-'+i,name:'Demostración',engine,status,demo:true}));
     this.events.fire();
   }
   async live(){this.demo=false;this.signature=undefined;await this.refresh();}

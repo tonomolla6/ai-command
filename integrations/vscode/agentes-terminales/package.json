@@ -1,7 +1,7 @@
 {
   "name": "agentes-terminales",
   "displayName": "AI Command Agentes",
-  "version": "0.1.13",
+  "version": "0.1.14",
   "publisher": "ai-command",
   "description": "Estado de los agentes de las terminales persistentes, de un vistazo.",
   "engines": {
@@ -53,7 +53,7 @@
       },
       {
         "command": "aiCommandAgents.demo",
-        "title": "AI Command Agentes: probar los tres colores",
+        "title": "AI Command Agentes: probar colores y proveedores",
         "icon": "$(beaker)"
       }
     ],
@@ -72,6 +72,31 @@
       ]
     },
     "colors": [
+      {
+        "id": "aiCommandAgents.providerCodex",
+        "description": "Punto de proveedor Codex.",
+        "defaults": {"dark":"#10A37F","light":"#087F62","highContrast":"#3DDDB1","highContrastLight":"#006B51"}
+      },
+      {
+        "id": "aiCommandAgents.providerClaude",
+        "description": "Punto de proveedor Claude.",
+        "defaults": {"dark":"#D97757","light":"#AD5032","highContrast":"#FFAB88","highContrastLight":"#A54325"}
+      },
+      {
+        "id": "aiCommandAgents.providerAgy",
+        "description": "Punto de proveedor Antigravity.",
+        "defaults": {"dark":"#A78BFA","light":"#7550C0","highContrast":"#C6B2FF","highContrastLight":"#6038B0"}
+      },
+      {
+        "id": "aiCommandAgents.providerOpencode",
+        "description": "Punto de proveedor OpenCode.",
+        "defaults": {"dark":"#F2C94C","light":"#9B7200","highContrast":"#FFE079","highContrastLight":"#795700"}
+      },
+      {
+        "id": "aiCommandAgents.providerTerminal",
+        "description": "Punto de terminal sin agente.",
+        "defaults": {"dark":"#7A8797","light":"#576575","highContrast":"#B7C3D2","highContrastLight":"#485260"}
+      },
       {
         "id": "aiCommandAgents.working",
         "description": "Agente trabajando.",
