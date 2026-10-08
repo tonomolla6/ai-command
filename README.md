@@ -123,6 +123,17 @@ próximo reset conocido más cercano; después, el mayor margen mínimo.
 Una ventana general agotada excluye la cuenta aunque otra ventana tenga saldo.
 No cambia cuentas durante una ejecución ni activa compras o créditos de pago.
 
+Al abrir o reanudar, reutiliza la caché oficial de `ai usage` durante un máximo
+de 120 segundos. Sólo consulta los perfiles que faltan, caducan o han cruzado
+una fecha de reset; no inventa nuevos porcentajes. Si varios lanzamientos llegan
+a la vez, uno consulta y los demás reutilizan el resultado. El mensaje indica
+cuándo está usando caché. Las cuotas desconocidas, agotadas o con identidad no
+verificada siguen excluidas de la selección automática.
+
+Para comprobar las cuotas ahora, usa `ai usage claude --refresh` antes de reanudar,
+o `ai auto claude --refresh --resume --session ID`. La cuenta elegida confirma
+su identidad de nuevo al ejecutar el CLI.
+
 ## Cuotas que se pueden comprobar
 
 ```bash
@@ -336,6 +347,12 @@ el último resultado en `~/.local/state/ai-manager/provider-updates.json` o ejec
 actualizando el gestor desde sus releases verificadas.
 
 ## VS Code Remote SSH y skill
+
+La lista Agentes usa dos puntos independientes: actividad a la izquierda y
+proveedor a la derecha. Codex es verde, Claude naranja, AGY violeta, OpenCode
+amarillo y una terminal normal gris. El proveedor también aparece en texto y
+en la información accesible. AGY/OpenCode se identifican por su proceso nativo;
+su actividad queda como no confirmada cuando no existe un registro compatible.
 
 ```bash
 ai vscode-install

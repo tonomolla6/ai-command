@@ -28,6 +28,12 @@ Dar de baja conserva los datos. Los atajos xN/cN y sus variantes r son dinámico
 `codex resume ID`, `claude resume ID` o `ai resume proveedor cuenta` reanudan.
 La última sesión se filtra por directorio; los subagentes no son sesiones principales.
 Un fallo de proveedor se resuelve con `--pick` o `ai handoff`, sin editar transcripts.
+La selección automática reutiliza la caché oficial de uso hasta 120 segundos,
+compartida entre directorios y lanzamientos. Una consulta simultánea por proveedor
+actualiza los perfiles pendientes; las siguientes reutilizan el resultado.
+Al cruzar un reset se vuelve a consultar, sin inventar disponibilidad. UNKNOWN,
+cuota agotada o identidad no verificada no permiten selección automática.
+`ai usage proveedor --refresh` o `ai auto proveedor --refresh` fuerzan la consulta.
 
 `ai usage --refresh` consulta en paralelo sin turnos al modelo. UNKNOWN es válido.
 `ai usage --monitoring` mantiene un panel interactivo con consultas en segundo
@@ -88,3 +94,9 @@ una petición de instalación allí.
 
 Cierra con el comando exacto de login pendiente, validación real y límites de lo
 probado. No describas un dry-run como una continuación autenticada comprobada.
+
+La extensión Agentes muestra dos puntos: actividad y proveedor. Codex verde,
+Claude naranja, AGY violeta, OpenCode amarillo y terminal gris. No deduzcas
+actividad por el color del proveedor: AGY/OpenCode pueden estar identificados
+sin un estado de turno confirmado. Tras actualizarla, `ai vscode-install` y
+recarga de ventana activan la nueva versión conservando los agentes en tmux.

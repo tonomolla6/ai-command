@@ -2,9 +2,18 @@
 
 Lista de terminales visibles con un indicador blanco (trabajando), azul
 (turno terminado), rojo (atención) o gris (sin agente / estado no confirmado).
-La descripción identifica si el agente es Codex o Claude.
+Cada fila añade un segundo punto con el proveedor: Codex verde, Claude naranja,
+AGY violeta, OpenCode amarillo o terminal normal gris. Un punto de proveedor
+hueco indica que no se ha podido identificar al agente; no equivale a una terminal
+sin agente. La descripción y el texto accesible mantienen ambos significados.
+Los iconos se adaptan a temas claros/oscuros y de alto contraste; los colores
+`aiCommandAgents.providerCodex`, `providerClaude`, `providerAgy`, `providerOpencode`
+y `providerTerminal` se pueden cambiar en `workbench.colorCustomizations`.
+El punto izquierdo conserva el estado de actividad; el derecho identifica el
+proveedor incluso cuando su actividad no está confirmada. Los SVG contienen
+sólo colores y se guardan en el almacenamiento privado de la extensión.
 Un clic abre la terminal correspondiente al final de la conversación, también
-si está dentro de un grupo dividido. El matraz prueba los tres colores;
+si está dentro de un grupo dividido. El matraz prueba los estados y proveedores;
 Actualizar vuelve al estado real.
 El icono de la barra usa el símbolo nativo `terminal` de VS Code, sin depender
 de una ruta SVG que pueda quedar obsoleta después de actualizar la extensión.

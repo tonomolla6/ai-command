@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- La selección automática de Codex/Claude comparte la caché oficial de 120 segundos con uso, refresca sólo perfiles pendientes y evita consultas duplicadas entre lanzamientos simultáneos. Revalida al cruzar resets y permite `ai auto --refresh`; no reutiliza porcentajes históricos tras un fallo.
+- AI Command Agentes 0.1.14 añade puntos independientes de actividad y proveedor, colores por agente, temas claro/oscuro y alto contraste, texto accesible y detección nativa de AGY/OpenCode sin inferir actividad.
+- Pruebas con cuatro procesos verifican una sola consulta por cuenta; la selección reciente conserva el ID exacto de resume y las reglas de identidad/disponibilidad.
+
 ## 1.4.0 — 2026-10-08
 
 - Política explícita `ai configure --codex-danger on/off`: usa el bypass oficial de Codex para sesiones nuevas, resume, exec y review, con selección automática, cuenta numerada o ACCOUNT; desactivada por defecto.
