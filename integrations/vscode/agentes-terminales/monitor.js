@@ -187,10 +187,10 @@ class Monitor {
     const sockets=process.env.AI_COMMAND_TMUX_SOCKET?[process.env.AI_COMMAND_TMUX_SOCKET]:['default','ai-command'];
     const clientMaps=bindings?await Promise.all(sockets.map(clientSessions)):[];
     const clients=new Map(clientMaps.flatMap(map=>[...map]));
-    const format='#{pane_id}\t#{pane_pid}\t#{@ai_command_vscode_key}\t#{@ai_command_agent_mark}\t#{@ai_command_vscode_workspace}\t#{session_id}';
+    const format='#{pane_id}\t#{pane_pid}\t#{@ai_command_vscode_key}\t#{@ai_command_agent_mark}\t#{@ai_command_vscode_workspace}\t#{session_id}\t#{@ai_command_vscode_launcher_pid}';
     const snapshots=await Promise.all(sockets.map(async socket=>(await tmux(['list-panes','-a','-F',format],socket)).split('\n').filter(Boolean).map(line=>{
-      const [pane,pid,persistentKey,raw,workspace,session]=line.split('\t');
-      const key=bindings?[...bindings].find(([_,pid])=>clients.get(pid)===socket+':'+session)?.[0]:persistentKey;
+      const [pane,pid,persistentKey,raw,workspace,session,launcher]=line.split('\t');
+      const key=bindings?[...bindings].find(([_,pid])=>Number.isInteger(pid)&&(clients.get(pid)===socket+':'+session||Number(launcher)===pid))?.[0]:persistentKey;
       let mark; try { mark=JSON.parse(raw); } catch {}
       return {pane,pid:Number(pid),key,mark,workspace,socket,identity:socket+':'+pane};
     })));

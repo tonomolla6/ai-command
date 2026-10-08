@@ -9,13 +9,16 @@ import fcntl
 import os
 import re
 import selectors
+import shlex
 import signal
+import socket
 import struct
 import subprocess
 import sys
 import termios
 import tty
 import time
+import tempfile
 from pathlib import Path
 
 
@@ -24,6 +27,84 @@ OCTAL = re.compile(rb"\\([0-7]{3})")
 
 def tmux_command(*args):
     return ["tmux", "-L", os.environ.get("AI_COMMAND_TMUX_SOCKET", "default"), *args]
+
+
+def pipe_relay(address):
+    """Forward an owned pipe-pane stream in memory, never into a log."""
+    with socket.socket(socket.AF_UNIX) as stream:
+        stream.connect(address)
+        while True:
+            data=os.read(0,65536)
+            if not data:break
+            stream.sendall(data)
+
+
+def legacy_connection(session):
+    """Old tmux servers use pipe-pane, avoiding their control-client crash."""
+    env={k:v for k,v in os.environ.items() if k not in ('TMUX','TMUX_PANE')}
+    def run(*args):
+        return subprocess.check_output(tmux_command(*args),env=env,stderr=subprocess.DEVNULL,text=True,timeout=3).rstrip('\n')
+    info=run('list-panes','-t',session+':','-F','#{pane_id} #{pane_pipe}').splitlines()
+    if len(info)!=1:raise ValueError('Native tabs require one pane')
+    pane,piped=info[0].split()
+    if piped!='0':raise ValueError('Existing pane output pipe is preserved')
+    # Keep the UNIX path short. This private socket never records output.
+    directory=Path(tempfile.mkdtemp(prefix='ai-terminal-pipe-'))
+    address=str(directory/'stream')
+    listener=socket.socket(socket.AF_UNIX);listener.bind(address);os.chmod(address,0o600);listener.listen(1);listener.settimeout(3)
+    saved=termios.tcgetattr(0);stream=None;closing=False;size=None
+    original=session_identity(session)
+    def stop(*_):
+        nonlocal closing
+        closing=True
+    for sig in (signal.SIGHUP,signal.SIGTERM):signal.signal(sig,stop)
+    signal.signal(signal.SIGWINCH,lambda *_:None)
+    def resize():
+        nonlocal size
+        rows,cols,_,_=struct.unpack('HHHH',fcntl.ioctl(0,termios.TIOCGWINSZ,b'\0'*8))
+        desired=(max(2,rows),max(2,cols))
+        if desired!=size:
+            size=desired;run('resize-window','-t',pane,'-x',str(size[1]),'-y',str(size[0]))
+    def write(data):
+        while data:data=data[os.write(1,data):]
+    selector=selectors.DefaultSelector()
+    try:
+        command=shlex.join([sys.executable,str(Path(__file__).resolve()),'--pipe-relay',address])
+        run('set-option','-p','-t',pane,'@ai_command_pipe_owner',address)
+        run('pipe-pane','-O','-t',pane,command)
+        stream,_=listener.accept();stream.setblocking(False)
+        tty.setraw(0);resize()
+        write(b'\x1b[0m\x1b[?1049l\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[r\x1b[H\x1b[2J\x1b[3J')
+        snapshot=run('capture-pane','-p','-e','-J','-S','-','-t',pane)
+        write(snapshot.replace('\n','\r\n').encode())
+        x,y,cursor=map(int,run('display-message','-p','-t',pane,'#{cursor_x} #{cursor_y} #{cursor_flag}').split())
+        write(f'\x1b[{y+1};{x+1}H'.encode()+b'\x1b[?2004h'+(b'\x1b[?25h' if cursor else b'\x1b[?25l'))
+        selector.register(0,selectors.EVENT_READ,'input');selector.register(stream,selectors.EVENT_READ,'output')
+        output_filter=OutputFilter()
+        while not closing:
+            for key,_ in selector.select(0.1):
+                if key.data=='input':
+                    data=os.read(0,1024)
+                    if not data:closing=True;break
+                    run('send-keys','-t',pane,'-H',*(f'{b:02x}' for b in data))
+                else:
+                    data=stream.recv(65536)
+                    if not data:return not closing
+                    write(output_filter.feed(data))
+            resize()
+    finally:
+        selector.close();listener.close()
+        if stream:stream.close()
+        try:
+            if session_identity(session)==original and run('show-option','-pqv','-t',pane,'@ai_command_pipe_owner')==address:
+                run('pipe-pane','-t',pane);run('set-option','-pu','-t',pane,'@ai_command_pipe_owner')
+        except (OSError,subprocess.SubprocessError):pass
+        try:termios.tcsetattr(0,termios.TCSANOW,saved)
+        except (OSError,termios.error):pass
+        try:write(b'\x1b[0m\x1b[?25h\x1b[?2004l')
+        except OSError:pass
+        Path(address).unlink(missing_ok=True);directory.rmdir()
+    return False
 
 
 def decode_output(data):
@@ -61,7 +142,7 @@ class OutputFilter:
                     self.pending = data
                 break
             sequence, data = data[:end + 1], data[end + 1:]
-            if not re.fullmatch(rb"\x1b\[(?:[?>=]?[0-9;]*c|\??[56]n)", sequence):
+            if not re.fullmatch(rb"\x1b\[(?:[?>=]?[0-9;]*c|\??[56]n|\?(?:1000|1002|1003|1006|1015)h)", sequence):
                 output.extend(sequence)
         return bytes(output)
 
@@ -237,6 +318,10 @@ def session_identity(session):
 
 
 def main():
+    if len(sys.argv)==3 and sys.argv[1]=='--pipe-relay':
+        try:pipe_relay(sys.argv[2])
+        except OSError:pass
+        return
     parser = argparse.ArgumentParser()
     parser.add_argument("session")
     args = parser.parse_args()
@@ -246,12 +331,15 @@ def main():
     if not original:
         return
     closing = False
+    server_version=subprocess.check_output(tmux_command('display-message','-p','-t',args.session+':','#{version}'),text=True).strip()
+    version=re.match(r'(\d+)\.(\d+)',server_version)
+    connect=legacy_connection if version and tuple(map(int,version.groups()))<(3,6) else connection
     def stop(*_):
         nonlocal closing
         closing = True
     while not closing and session_identity(args.session) == original:
         try:
-            if not connection(args.session):
+            if not connect(args.session):
                 break
         except (OSError, RuntimeError, ValueError, subprocess.SubprocessError, termios.error) as error:
             log_event(args.session, "transport_error=" + type(error).__name__)

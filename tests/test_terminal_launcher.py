@@ -34,14 +34,14 @@ class TerminalLauncherTests(unittest.TestCase):
             self.assertIn('ai resume',error)
             self.assertFalse((root/'unwanted-shell').exists())
 
-    def test_legacy_tmux_uses_a_classic_client_without_the_control_renderer(self):
+    def test_unsupported_tmux_uses_a_classic_client_without_the_control_renderer(self):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp)
             script='''#!/bin/sh
 case "$1" in
  list-sessions) printf '$7\\n';;
  show-option) printf '1\\n';;
- display-message) printf '3.4\\n';;
+ display-message) printf '3.1\\n';;
  attach-session) touch "$HOME/classic-client";;
  list-panes) touch "$HOME/unwanted-control-client"; exit 1;;
 esac

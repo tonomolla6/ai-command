@@ -3,7 +3,7 @@
 const { execFile } = require('node:child_process');
 const { promisify } = require('node:util');
 const { randomBytes } = require('node:crypto');
-const { readFile } = require('node:fs/promises');
+const { readFile, stat } = require('node:fs/promises');
 const execute = promisify(execFile);
 
 class Tmux {
@@ -70,6 +70,19 @@ class Tmux {
       } catch (error) {
         if (error.code !== 'ENOENT' && error.code !== 'ESRCH') throw error;
       }
+    }
+    // Legacy servers deliberately have no control client. The owned output
+    // pipe and the recorded launcher PID identify their native transport.
+    const launcher=Number(await this.run(['show-option','-qv','-t',session.id,'@ai_command_vscode_launcher_pid'],true,session.socket));
+    if(launcher){
+      try{
+        const command=await readFile(`/proc/${launcher}/cmdline`,'utf8');
+        const address=await this.run(['show-option','-pqv','-t',session.id+':','@ai_command_pipe_owner'],true,session.socket);
+        if(command.split('\0').some(arg=>arg.endsWith('/terminales-native'))&&address){
+          const owner=await stat(address);
+          if(owner.isSocket()&&owner.uid===process.getuid())return true;
+        }
+      }catch(error){if(!['ENOENT','ESRCH'].includes(error.code))throw error;}
     }
     return false;
   }
