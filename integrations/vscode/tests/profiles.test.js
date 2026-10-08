@@ -8,6 +8,21 @@ const {processPaths}=require('../agentes-terminales/process-paths');
 const {readClaude}=require('../agentes-terminales/claude');
 const {findAgents,Monitor}=require('../agentes-terminales/monitor');
 const {Tmux}=require('../terminales-persistentes/tmux');
+const {spawnSync,execFileSync}=require('node:child_process');
+
+test('a real detached tmux server with no attached clients is an empty list, including legacy transports',async(t)=>{
+ if(spawnSync('tmux',['-V']).status!==0){t.skip('tmux not installed');return;}
+ const socket='ai-empty-clients-'+process.pid+'-'+Date.now();
+ const backend=new Tmux({...process.env,AI_COMMAND_TMUX_SOCKET:socket});
+ try{
+  execFileSync('tmux',['-L',socket,'-f','/dev/null','new-session','-d','-s','fixture'],{env:{...process.env,TMUX:''}});
+  const id=execFileSync('tmux',['-L',socket,'display-message','-p','-t','fixture','#{session_id}'],{encoding:'utf8'}).trim();
+  assert.deepEqual(await backend.clients(),new Map());
+  assert.equal(await backend.nativeConnected({id,socket}),false);
+ }finally{
+  try{execFileSync('tmux',['-L',socket,'kill-server'],{stdio:'ignore'});}catch{}
+ }
+});
 
 test('a renamed Python account launcher is traversed to the native agent',async()=>{
  const root=await fs.mkdtemp(path.join(os.tmpdir(),'ai-process-'));

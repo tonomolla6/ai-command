@@ -6,6 +6,7 @@
 
 - `ai usage --monitoring`: panel de terminal con consultas oficiales silenciosas cada cinco minutos en segundo plano, sin superposición. Mantiene datos visibles, filtro de proveedor, colores, cuenta atrás, scroll, resize y salida limpia con `q`/Ctrl+C.
 - Pruebas reales de PTY verifican consulta periódica, actualización manual, errores, restauración de terminal y cancelación de procesos propios, incluidos hijos con una sesión separada.
+- La extensión de terminales admite listas de clientes vacías en servidores tmux antiguos que usan la conexión privada; incluye una prueba con servidor real.
 - Las tarjetas de uso muestran los resets manuales disponibles publicados por Codex, separados del saldo y de las fechas de reinicio automático. Cero, dato no publicado y consulta fallida se distinguen sin consumir resets ni modificar la selección de cuenta.
 - VS Code conserva las pestañas y grupos Split/Join; tmux conserva los agentes. La recuperación usa claves existentes, adopta pestañas revividas y evita terminales vacías adicionales y cambios de foco.
 - Resume nativo de Claude resuelve conversaciones de otros perfiles por su ruta original, sin compartir credenciales. Codex y Claude conservan scroll normal.

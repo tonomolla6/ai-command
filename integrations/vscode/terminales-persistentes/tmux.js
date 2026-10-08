@@ -20,6 +20,9 @@ class Tmux {
       return stdout.trimEnd();
     } catch (error) {
       if (allowMissing && /no server running|No such file or directory/.test(error.stderr || '')) return '';
+      // Legacy pipe transports have no attached tmux client. tmux 3.4 reports
+      // that empty list as an error when there is no current target.
+      if (allowMissing && args[0] === 'list-clients' && /^no current target\s*$/.test(error.stderr || '')) return '';
       throw error;
     }
   }
