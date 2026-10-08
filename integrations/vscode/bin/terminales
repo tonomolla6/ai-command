@@ -133,7 +133,7 @@ restore_vscode_terminal() {
 }
 
 persistent_vscode_terminal() {
-  local key=${mode#vsc-tab-} state_dir working_dir
+  local key=${mode##*-} state_dir working_dir
   if [[ ! "$key" =~ ^[a-f0-9]{32}$ ]]; then
     printf 'Identificador de pestana no valido.\n' >&2
     exit 2
@@ -145,9 +145,17 @@ persistent_vscode_terminal() {
   target=$(tmux list-sessions -f "#{==:#{@ai_command_vscode_key},$key}" \
     -F '#{session_id}' 2>/dev/null || true)
   if [[ -z "$target" ]]; then
+    if [[ "$mode" == vsc-resume-* ]]; then
+      printf 'La sesion tmux original ya no existe. Usa ai resume para recuperar la conversacion guardada.\n' >&2
+      exit 69
+    fi
     working_dir=${AI_COMMAND_TERMINAL_CWD:-${PWD:-$DEFAULT_ROOT}}
     new_terminal "$working_dir"
     tmux set-option -t "$target" @ai_command_vscode_key "$key"
+  fi
+  if [[ ! "$target" =~ ^[$][0-9]+$ ]]; then
+    printf 'La clave de terminal corresponde a varias sesiones; no se abre otra automaticamente.\n' >&2
+    exit 69
   fi
   flock -u 9
   exec 9>&-
@@ -156,7 +164,7 @@ persistent_vscode_terminal() {
 case "$mode" in
   nueva|--new) new_terminal ;;
   recuperar|--pick) recover_terminal ;;
-  vsc-tab-*) persistent_vscode_terminal ;;
+  vsc-tab-*|vsc-resume-*) persistent_vscode_terminal ;;
   vscode-*) restore_vscode_terminal ;;
   *)
     target="=$mode"
@@ -170,7 +178,15 @@ esac
 tmux set-option -t "$target" @ai_command_interactive 1
 tmux set-option -t "$target" @ai_command_auto_restore 1
 native_mode=$(tmux show-option -t "$target" -qv @ai_command_native)
-if [[ "${native_mode:-${AI_COMMAND_TERMINALES_NATIVE:-0}}" == 1 ]]; then
+server_version=$(tmux display-message -p -t "$target:" '#{version}')
+# Native reconnection crashed the 3.4 server during a real reload. Preserve
+# its processes using classic clients; the control renderer is tested on 3.7.
+native_supported=0
+if [[ "$server_version" =~ ^([0-9]+)\.([0-9]+) ]] && \
+    (( BASH_REMATCH[1] > 3 || BASH_REMATCH[1] == 3 && BASH_REMATCH[2] >= 7 )); then
+  native_supported=1
+fi
+if [[ "${native_mode:-${AI_COMMAND_TERMINALES_NATIVE:-0}}" == 1 && "$native_supported" == 1 ]]; then
   tmux set-option -t "$target" @ai_command_native 1
   exec python3 "${AI_COMMAND_TERMINALES_NATIVE_HELPER:-$(dirname -- "$0")/terminales-native}" "$target"
 fi

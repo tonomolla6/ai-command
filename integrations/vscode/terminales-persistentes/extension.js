@@ -25,13 +25,9 @@ async function activate(context) {
   context.subscriptions.push({ dispose: () => clearInterval(timer) });
   const hasWorkspace = (vscode.workspace.workspaceFolders || []).length > 0;
   if (hasWorkspace && vscode.workspace.getConfiguration('aiCommandTerminales').get('autoRestore', true)) {
-    await controller.migrate();
-    // Una clave tmux no demuestra que VS Code haya recuperado la pestaña.
-    // Adoptar las visibles y recuperar todas las ausentes, tambien las con clave.
-    await controller.restore();
+    await controller.start();
     const config = vscode.workspace.getConfiguration('terminal.integrated');
-    await config.update('enablePersistentSessions', true, vscode.ConfigurationTarget.Global);
-    await config.update('persistentSessionReviveProcess', 'onExitAndWindowClose', vscode.ConfigurationTarget.Global);
+    await config.update('enablePersistentSessions', false, vscode.ConfigurationTarget.Global);
     await config.update('rightClickBehavior', 'copyPaste', vscode.ConfigurationTarget.Global);
     await config.update('copyOnSelection', false, vscode.ConfigurationTarget.Global);
     await config.update('scrollback', 50000, vscode.ConfigurationTarget.Global);

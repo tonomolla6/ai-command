@@ -2,7 +2,7 @@
   "name": "terminales-persistentes",
   "displayName": "AI Command Terminales",
   "description": "Terminales nativas de VS Code con procesos persistentes en tmux.",
-  "version": "0.4.5",
+  "version": "0.4.6",
   "publisher": "ai-command",
   "engines": {
     "vscode": "^1.85.0"

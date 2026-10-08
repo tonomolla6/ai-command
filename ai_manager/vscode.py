@@ -68,6 +68,9 @@ def install_extensions(manager):
         installed.append(package['displayName']+' '+package['version'])
     machine.parent.mkdir(parents=True,exist_ok=True)
     settings['terminal.integrated.defaultProfile.linux']='AI Command tmux persistente'
+    # tmux owns the processes and the extension owns their tabs. Native revival
+    # also recreated old profile entries with fresh keys during migration.
+    settings['terminal.integrated.enablePersistentSessions']=False
     atomic_write(registry,json.dumps(entries,indent=2)+'\n',0o644)
     atomic_write(obsolete,json.dumps(retired,indent=2)+'\n',0o644)
     atomic_write(machine,json.dumps(settings,indent=2)+'\n',0o600)

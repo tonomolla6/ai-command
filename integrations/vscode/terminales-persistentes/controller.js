@@ -40,12 +40,12 @@ class Controller {
     return workspaceRoots(this.vscode)[0];
   }
 
-  newOptions(key = randomBytes(16).toString('hex')) {
+  newOptions(key = randomBytes(16).toString('hex'), recovering = false) {
     return {
-      name: 'Terminal', shellPath: LAUNCHER, shellArgs: ['vsc-tab-' + key], cwd: this.workspaceRoot(),
+      name: 'Terminal', shellPath: LAUNCHER, shellArgs: [(recovering ? 'vsc-resume-' : 'vsc-tab-') + key], cwd: this.workspaceRoot(),
       env: { TMUX: null, TMUX_PANE: null, NO_COLOR: null, AI_COMMAND_TERMINALES_NATIVE: '1',
         AI_COMMAND_TERMINAL_CWD: this.workspaceRoot() },
-      isTransient: false,
+      isTransient: true,
     };
   }
 
@@ -100,7 +100,7 @@ class Controller {
       if (!record) {
         const pid = await processIdWithin(terminal);
         const arg = terminal.creationOptions?.shellArgs?.[0];
-        const key = typeof arg === 'string' && arg.startsWith('vsc-tab-') ? arg.slice(8) : '';
+        const key = typeof arg === 'string' ? /^vsc-(?:tab|resume)-([a-f0-9]{32})$/.exec(arg)?.[1] || '' : '';
         const clientSessionId = clients.get(pid);
         // A visible terminal is authoritative after changing workspace: adopt
         // its existing tmux session into the workspace showing that tab.
@@ -141,6 +141,11 @@ class Controller {
     return this.restoring;
   }
 
+  start() {
+    // Reconnection must only attach clients, never relaunch live terminals.
+    return this.restore();
+  }
+
   async doRestore(legacyOnly) {
     await this.sync();
     const represented = new Set([...this.tracked.values()].map(record => identity(record.session)));
@@ -153,7 +158,7 @@ class Controller {
       if (represented.has(identity(session))) continue;
       const key = await this.backend.persistentKey(session);
       const terminal = this.vscode.window.createTerminal({
-        ...this.newOptions(key), name: session.label || session.name,
+        ...this.newOptions(key, true), name: session.label || session.name,
       });
       this.tracked.set(terminal, { session, savedLabel: session.label, savedOrder: session.order, recovered: true });
       represented.add(identity(session));
@@ -172,7 +177,7 @@ class Controller {
     for (const [terminal, record] of [...this.tracked]) {
       if (this.closed.has(terminal) || await this.backend.nativeConnected(record.session)) continue;
       const arg = terminal.creationOptions?.shellArgs?.[0];
-      if (!(typeof arg === 'string' && arg.startsWith('vsc-tab-'))) {
+      if (!(typeof arg === 'string' && /^vsc-(?:tab|resume)-[a-f0-9]{32}$/.test(arg))) {
         throw new Error('La pestaña ' + terminal.name + ' necesita primero una clave persistente.');
       }
       const label = terminal.name;
@@ -221,7 +226,7 @@ class Controller {
     this.recoveryAttempts.set(identity(current), attempts);
     const key = await this.backend.persistentKey(current);
     if (this.disposed) return;
-    const recovered = this.vscode.window.createTerminal({ ...this.newOptions(key), name: current.label || current.name });
+    const recovered = this.vscode.window.createTerminal({ ...this.newOptions(key, true), name: current.label || current.name });
     this.tracked.set(recovered, { session: current, savedLabel: current.label, savedOrder: current.order, recovered: true });
     this.report('Terminal recuperada tras salida del cliente; proceso conservado: ' + current.name);
   }
@@ -238,7 +243,7 @@ class Controller {
       if (!session) {
         // A tab can be deleted before the first sync, after its client has exited.
         const arg = terminal.creationOptions?.shellArgs?.[0];
-        const key = typeof arg === 'string' && /^vsc-tab-[a-f0-9]{32}$/.test(arg) ? arg.slice(8) : '';
+        const key = typeof arg === 'string' ? /^vsc-(?:tab|resume)-([a-f0-9]{32})$/.exec(arg)?.[1] || '' : '';
         if (key) session = (await this.backend.sessions()).find(s => s.key === key && this.allowed(s));
       }
       if (session) {

@@ -4,7 +4,7 @@ const {NativeLayout}=require('./native-layout');
 const LABELS={working:'Trabajando',done:'Terminado',attention:'Necesita atención',unknown:'Estado no confirmado',off:'Sin agente activo'};
 const keyOf=t=>{
   const arg=t.creationOptions?.shellArgs?.[0];
-  return typeof arg==='string'&&/^vsc-tab-[a-f0-9]{32}$/.test(arg)?arg.slice(8):undefined;
+  return typeof arg==='string'?/^vsc-(?:tab|resume)-([a-f0-9]{32})$/.exec(arg)?.[1]:undefined;
 };
 const cwdOf=t=>{
   const cwd=t.creationOptions?.cwd;
