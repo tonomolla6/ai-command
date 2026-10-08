@@ -32,10 +32,23 @@ def install_extensions(manager):
         timestamp=next((e.get('metadata',{}).get('installedTimestamp') for e in entries
                         if e.get('identifier',{}).get('id')==ident and e.get('version')==package['version']),None)
         dest=target/relative
+        helpers={}
+        if name=='terminales-persistentes':
+            helpers={Path('bin')/filename:source/'bin'/filename
+                     for filename in ('terminales','terminales-native')}
+            if any(not path.is_file() for path in helpers.values()):
+                raise ManagerError('Paquete de terminales incompleto; faltan los lanzadores incluidos')
+        expected={p.relative_to(folder):p for p in folder.rglob('*') if p.is_file()}
+        expected.update(helpers)
         if not dest.exists():
             shutil.copytree(folder,dest)
-        elif any(not (dest/p.relative_to(folder)).is_file() or (dest/p.relative_to(folder)).read_bytes()!=p.read_bytes()
-                 for p in folder.rglob('*') if p.is_file()):
+            for relative_helper,path in helpers.items():
+                output=dest/relative_helper
+                output.parent.mkdir(parents=True,exist_ok=True)
+                shutil.copyfile(path,output)
+                output.chmod(0o755)
+        elif any(not (dest/relative_path).is_file() or (dest/relative_path).read_bytes()!=p.read_bytes()
+                 for relative_path,p in expected.items()):
             raise ManagerError('Extensión de la misma versión con cambios locales conservada: '+relative)
         remaining=[]
         for entry in entries:

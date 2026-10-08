@@ -1,9 +1,12 @@
 'use strict';
 
 const { randomBytes } = require('node:crypto');
+const path = require('node:path');
 
 const ROOT = process.env.AI_COMMAND_WORKSPACE_ROOT || require('node:os').homedir();
-const LAUNCHER = process.env.AI_COMMAND_TERMINALES_TEST_LAUNCHER || 'terminales';
+// A relative shellPath can be replaced by VS Code's default profile during
+// resolution. Own the helper pair and preserve the exact persistent key.
+const LAUNCHER = process.env.AI_COMMAND_TERMINALES_TEST_LAUNCHER || path.join(__dirname, 'bin', 'terminales');
 const identity = session => session.id + ':' + session.created;
 const clean = value => String(value || '').replace(/[\x00-\x1f\x7f]/g, ' ').slice(0, 200).trim();
 
