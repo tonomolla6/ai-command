@@ -57,7 +57,15 @@ En instalación global puede requerir sudo; conserva cuentas y datos locales.
 No publiques una release ni actualices otro servidor por una petición genérica
 de desarrollo. Lee docs/UPDATES.md del repositorio al implementar migraciones.
 
-La política de Claude es explícita: `ai configure --claude-danger on/off`.
+Las políticas son explícitas y separadas por usuario/proveedor:
+`ai configure --codex-danger on/off --claude-danger on/off --agy-danger on/off --opencode-danger on/off`.
+Codex recibe --dangerously-bypass-approvals-and-sandbox al abrir, reanudar y en
+exec/review, también con ACCOUNT. Conserva perfiles, modelo reservado y prompts;
+normaliza los flags de sandbox/aprobación incompatibles. Login, ayuda, administración
+y consultas oficiales no reciben el bypass. Una instalación nueva lo deja desactivado.
+No cambies el modo de agentes abiertos: sólo los siguientes lanzamientos lo aplican.
+
+La política de Claude usa `ai configure --claude-danger on/off`.
 Activada aplica IS_SANDBOX=1, --dangerously-skip-permissions y bypassPermissions
 a nuevos lanzamientos y resume. Comprueba modo efectivo con un proceso propio;
 no escribas en TTYs de otra sesión ni eludas políticas del proveedor.

@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 1.4.0 — 2026-10-08
+
+- Política explícita `ai configure --codex-danger on/off`: usa el bypass oficial de Codex para sesiones nuevas, resume, exec y review, con selección automática, cuenta numerada o ACCOUNT; desactivada por defecto.
+- Normaliza opciones de permisos incompatibles conservando prompts, identidad y modelo reservado. Ayuda, administración y consultas oficiales permanecen independientes; `codex resume --help` no inicia selección de cuenta.
+- AGY aplica su bypass sin un flag de sandbox contradictorio; OpenCode mantiene `--auto` en sesiones nuevas y resume, respetando los deny explícitos.
+- Pruebas con lanzadores instalados, procesos nativos de fixture y PTY comprueban permisos, resume exacto, aislamiento, backups y consultas sin bypass.
+
 ## 1.3.0 — 2026-10-08
 
 - `ai usage --monitoring`: panel de terminal con consultas oficiales silenciosas cada cinco minutos en segundo plano, sin superposición. Mantiene datos visibles, filtro de proveedor, colores, cuenta atrás, scroll, resize y salida limpia con `q`/Ctrl+C.

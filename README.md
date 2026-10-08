@@ -199,6 +199,33 @@ selector o handoff. No convierte bases de conversaciones entre proveedores.
 
 ## Permisos de ejecución
 
+Cada proveedor tiene una política de permisos independiente. Para activar las
+cuatro en este usuario:
+
+```bash
+ai configure --codex-danger on --claude-danger on --agy-danger on --opencode-danger on
+```
+
+Codex usa `--dangerously-bypass-approvals-and-sandbox`: ejecuta sin sandbox y sin
+solicitar aprobaciones. Se aplica a sesiones nuevas, resume, `exec`, `exec resume`
+y `review`, incluidos los atajos numerados y la selección mediante `ACCOUNT`.
+Los flags de sandbox/aprobación incompatibles se normalizan; los prompts, el
+modelo reservado y los perfiles mantienen su contenido e identidad.
+
+```bash
+ai configure --codex-danger on
+codex                       # cuenta automática, conversación nueva
+codex resume ID             # misma política, conversación solicitada
+ai codex 2                  # cuenta explícita
+ACCOUNT=codex2 codex exec 'Tu tarea'
+ai configure --codex-danger off
+```
+
+Es opt-in y está desactivado por defecto en instalaciones nuevas. Cambiar la
+política afecta a los siguientes lanzamientos; las sesiones ya abiertas conservan
+su modo. Login, ayuda, administración y consultas de cuotas usan el CLI original
+sin añadir estos permisos. La opción se ha verificado en Codex CLI 0.161.0.
+
 Una instalación nueva conserva los permisos normales de Claude. Si deseas que
 **todos sus lanzamientos gestionados**, incluidos `--resume`, `-r`, `--continue`
 y `-p`, utilicen bypass:
@@ -227,6 +254,8 @@ ai resume opencode          # mismo modo al reanudar
 OpenCode `--auto` aprueba solicitudes que pedirían confirmación y mantiene las
 reglas `deny` explícitas del proveedor, proyecto y agente. Son las opciones
 oficiales verificadas en AGY 1.3.1 y OpenCode 1.18.35.
+Con su política activada, AGY también descarta un flag `--sandbox` de lanzamiento
+incompatible con el acceso completo; no cambia el contenido de los prompts.
 
 Para aplicar la misma política a los comandos directos en Bash, sin mover los
 ejecutables ni alterar sus actualizaciones nativas:
