@@ -21,8 +21,8 @@ def add(provider,number,email,windows,**extra):
  rows.append({'status':'OK','email_verified':bool(email),'windows':windows,
               'credits':{'display':'Desactivados'},'queried_at':'2026-10-07T10:30:00+00:00',**extra})
 
-add('codex',1,'ana@example.org',[window('codex/5h',34,300),window('codex/weekly',72,10080)],credits={'display':'120 créditos'})
-add('codex',2,'sam@example.org',[window('codex/5h',88,300),window('codex/weekly',91,10080)],credits={'display':'560 créditos'})
+add('codex',1,'ana@example.org',[window('codex/5h',34,300),window('codex/weekly',72,10080)],credits={'display':'120 créditos'},reset_credits_available=2)
+add('codex',2,'sam@example.org',[window('codex/5h',88,300),window('codex/weekly',91,10080)],credits={'display':'560 créditos'},reset_credits_available=0)
 add('claude',1,'alex@example.org',[window('Current session',50,300),window('Current week (all models)',67,10080),window('Current week (Fable)',97,10080)])
 add('claude',2,'dani@example.org',[window('Current session',86,300),window('Current week (all models)',0,10080),window('Current week (Fable)',77,10080)])
 add('agy','current',None,[window('Gemini Models · 5h',100,300),window('Gemini Models · Semanal',95,10080),window('Claude and GPT models · 5h',80,300),window('Claude and GPT models · Semanal',70,10080)],

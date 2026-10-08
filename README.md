@@ -140,6 +140,16 @@ incluyen correo verificado, ventanas publicadas, reset, créditos y fecha de con
 Una ventana semanal general agotada pone las dependientes en rojo y muestra
 `BLOQUEADO`, conservando sus porcentajes originales.
 
+`Resets: 2 disponibles` muestra los reinicios manuales que publica la cuenta,
+separados del saldo de créditos y de la fecha del próximo reinicio automático.
+Codex proporciona el contador mediante su
+[protocolo oficial](https://developers.openai.com/codex/app-server/).
+Un cero se muestra como `0 disponibles`; un dato ausente aparece como
+`No publicado por CLI` o `UNKNOWN` si la consulta falla. Claude Code no publica
+ese contador en la versión comprobada: sus resets se consultan en
+[Settings > Usage de Claude](https://support.claude.com/en/articles/17007452-what-is-a-limit-reset).
+Consultar uso no consume resets ni habilita una cuenta con cuota agotada.
+
 | Herramienta | Fuente de información |
 |---|---|
 | Codex | Protocolo local oficial de `codex app-server`, `account/rateLimits/read` |

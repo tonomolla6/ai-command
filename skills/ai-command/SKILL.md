@@ -30,6 +30,10 @@ La última sesión se filtra por directorio; los subagentes no son sesiones prin
 Un fallo de proveedor se resuelve con `--pick` o `ai handoff`, sin editar transcripts.
 
 `ai usage --refresh` consulta en paralelo sin turnos al modelo. UNKNOWN es válido.
+Las tarjetas distinguen el próximo reinicio automático, los créditos y los
+resets manuales disponibles. Codex publica el contador oficial; si otro CLI no
+lo publica, no inferir cero ni usar endpoints privados. Consultar uso no consume
+resets ni permite seleccionar una cuenta con cuota agotada.
 OpenCode muestra actividad local aproximada, nunca cuota restante. AGY/OpenCode
 usan el único login actual. No actives compras, proveedores de pago ni nuevos logins
 sin que la tarea los pida.

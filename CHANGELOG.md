@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Las tarjetas de uso muestran los resets manuales disponibles publicados por Codex, separados del saldo y de las fechas de reinicio automático. Cero, dato no publicado y consulta fallida se distinguen sin consumir resets ni modificar la selección de cuenta.
 - VS Code conserva las pestañas y grupos Split/Join; tmux conserva los agentes. La recuperación usa claves existentes, adopta pestañas revividas y evita terminales vacías adicionales y cambios de foco.
 - Resume nativo de Claude resuelve conversaciones de otros perfiles por su ruta original, sin compartir credenciales. Codex y Claude conservan scroll normal.
 - Conexión privada para servidores tmux 3.2–3.5 activos, sin control clients ni reiniciar agentes. Pruebas reales de PTY y VS Code con dos reinicios, Split, Join y scroll.
