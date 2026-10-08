@@ -30,6 +30,9 @@ La última sesión se filtra por directorio; los subagentes no son sesiones prin
 Un fallo de proveedor se resuelve con `--pick` o `ai handoff`, sin editar transcripts.
 
 `ai usage --refresh` consulta en paralelo sin turnos al modelo. UNKNOWN es válido.
+`ai usage --monitoring` mantiene un panel interactivo con consultas en segundo
+plano cada cinco minutos. Admite un proveedor, `r` para consultar de nuevo y `q`
+para salir. Usa una sola instancia cuando baste; no añade turnos ni consume resets.
 Las tarjetas distinguen el próximo reinicio automático, los créditos y los
 resets manuales disponibles. Codex publica el contador oficial; si otro CLI no
 lo publica, no inferir cero ni usar endpoints privados. Consultar uso no consume

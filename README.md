@@ -130,6 +130,8 @@ ai usage                    # consulta en paralelo; caché de 120 segundos
 ai usage --refresh          # consulta fresca de todas las cuentas activas
 ai usage --cached           # sólo caché local
 ai usage --json             # datos estructurados para tus scripts
+ai usage --monitoring       # panel vivo; actualiza cuotas cada cinco minutos
+ai usage codex --monitoring # el mismo panel, sólo para Codex
 ai usage codex              # sólo Codex; también claude, agy u opencode
 ai usage agy --refresh      # consultar únicamente AGY de nuevo
 ai usage --layout stacked   # tarjetas verticales para terminales estrechas
@@ -139,6 +141,17 @@ Codex, Claude y AGY/OpenCode ocupan tres columnas en terminales anchas. Las tarj
 incluyen correo verificado, ventanas publicadas, reset, créditos y fecha de consulta.
 Una ventana semanal general agotada pone las dependientes en rojo y muestra
 `BLOQUEADO`, conservando sus porcentajes originales.
+
+El modo `--monitoring` ocupa la terminal como un monitor de sistema. Mantiene
+las tarjetas con colores y columnas, muestra la cuenta atrás y consulta todas
+las cuentas seleccionadas en paralelo cada cinco minutos. Las consultas se
+ejecutan en segundo plano mientras el panel está abierto; los datos anteriores
+siguen visibles hasta que termina la consulta, sin generar turnos al modelo.
+Usa `r` para actualizar, `q` o `Ctrl+C` para salir, flechas o rueda para desplazarte
+y `PgUp`/`PgDn` para pasar de página. Conserva la pantalla anterior al salir y
+adapta el panel al cambiar el tamaño de la terminal. Si una consulta sigue activa,
+espera a que termine antes de empezar otra. El modo requiere una terminal
+interactiva y admite el filtro de proveedor, `--layout` y `--color`.
 
 `Resets: 2 disponibles` muestra los reinicios manuales que publica la cuenta,
 separados del saldo de créditos y de la fecha del próximo reinicio automático.
