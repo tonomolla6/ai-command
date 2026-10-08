@@ -169,6 +169,14 @@ def usage_card(account,row,width,reset,age):
         else:body.extend([meter,reset_line])
     for value in credits_text(row.get('credits')):
         body.append(colored('Créditos: ','bold')+colored(value,'ok' if value!='UNKNOWN' else 'muted'))
+    resets=row.get('reset_credits_available')
+    if type(resets) is int and resets>=0:
+        reset_text=f"{resets} "+('disponible' if resets==1 else 'disponibles')
+        reset_style='ok' if resets else 'low'
+    else:
+        reset_text='No publicado por CLI' if row.get('status')=='OK' and resets is None else 'UNKNOWN'
+        reset_style='muted'
+    body.append(colored('Resets: ','bold')+colored(reset_text,reset_style))
     if row.get('activity'):body.extend(activity_lines(row['activity']))
     if row.get('free_models'):
         body.append(colored(f"{len(row['free_models'])} modelos FREE · catálogo",'ok'))

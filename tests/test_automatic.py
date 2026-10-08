@@ -217,6 +217,25 @@ class AutomaticTests(unittest.TestCase):
         self.assertFalse(entry['email_verified'])
         with self.assertRaises(ManagerError): select_account(self.manager, 'codex', {'codex:1': entry})
 
+    def test_official_reset_count_is_preserved_without_redeeming_or_inferred_details(self):
+        for count in (0,1,7,None,True,-1,'private-value'):
+            calls=[]
+            class RPC:
+                def __enter__(self):return self
+                def __exit__(self,*args):pass
+                def call(rpc,method,params=None):
+                    calls.append(method)
+                    if method=='account/read':return {'account':{'email':self.first['email']}}
+                    return {'rateLimits':{'primary':{'usedPercent':100,'windowDurationMins':300}},
+                            'rateLimitResetCredits':{'availableCount':count,'credits':[]}}
+            with self.subTest(count=count),patch('ai_manager.providers.CodexRPC',return_value=RPC()):
+                entry=query_limits(self.manager,self.first)
+            self.assertEqual(calls,['account/read','account/rateLimits/read'])
+            self.assertEqual(entry.get('reset_credits_available'),count if type(count) is int and count>=0 else None)
+            self.assertNotIn('private-value',json.dumps(entry))
+            self.assertEqual(entry['windows'][0]['available_percent'],0)
+            with self.assertRaises(ManagerError):select_account(self.manager,'codex',{'codex:1':entry})
+
     def test_relaunch_selects_next_available_and_resumes_same_cwd_session(self):
         args = argparse.Namespace(provider='codex', new=False, resume=True, dry_run=True, extra=[])
         session = {'id': 'shared-thread', 'origin_account': '1', 'updated': 1, 'shared_sqlite': True}

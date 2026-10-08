@@ -109,5 +109,41 @@ class UsageLayoutTests(unittest.TestCase):
         self.assertIn('cuota UNKNOWN',text)
         self.assertNotIn('25% disponible',text)
 
+    def test_manual_reset_balance_is_separate_from_exhausted_quota_and_money(self):
+        account={'provider':'codex','account':'2','label':'Codex 2'}
+        row={'status':'OK','windows':[{'name':'codex/weekly','available_percent':0}],
+             'credits':[{'balance':'125','bucket':'codex'}],'reset_credits_available':2}
+        with patch.dict(os.environ,{'AI_MANAGER_COLOR':'always'}):
+            text='\n'.join(usage_card(account,row,38,lambda w:'mañana',lambda r:0))
+        self.assertIn('AGOTADO',text)
+        self.assertIn('\x1b[32m2 disponibles\x1b[0m',text)
+        self.assertIn('125.00 créditos',text)
+        self.assertTrue(all(visible_width(line)==38 for line in text.splitlines()))
+        self.assertEqual(row['windows'][0]['available_percent'],0)
+
+    def test_zero_and_single_resets_keep_their_exact_meaning(self):
+        account={'provider':'codex','account':'2','label':'Codex 2'}
+        for count,expected in ((0,'0 disponibles'),(1,'1 disponible')):
+            with self.subTest(count=count),patch.dict(os.environ,{'AI_MANAGER_COLOR':'never'}):
+                text='\n'.join(usage_card(account,{'status':'OK','reset_credits_available':count},64,
+                                        lambda w:'UNKNOWN',lambda r:0))
+            self.assertIn('Resets: '+expected,text)
+
+    def test_unpublished_resets_never_infer_zero_or_use_credit_balance(self):
+        for provider in ('codex','claude','agy','opencode'):
+            account={'provider':provider,'account':'2','label':provider}
+            for status,expected in (('OK','No publicado por CLI'),('UNKNOWN','UNKNOWN'),('SIN LOGIN','UNKNOWN')):
+                with self.subTest(provider=provider,status=status),patch.dict(os.environ,{'AI_MANAGER_COLOR':'never'}):
+                    text='\n'.join(usage_card(account,{'status':status,'credits':{'balance':10}},64,
+                                            lambda w:'UNKNOWN',lambda r:0))
+                self.assertIn('Resets: '+expected,text)
+                self.assertNotIn('0 disponibles',text)
+            for invalid in (True,-1,1.5,'secret-value'):
+                with patch.dict(os.environ,{'AI_MANAGER_COLOR':'never'}):
+                    text='\n'.join(usage_card(account,{'status':'OK','reset_credits_available':invalid},64,
+                                            lambda w:'UNKNOWN',lambda r:0))
+                self.assertIn('Resets: UNKNOWN',text)
+                self.assertNotIn('secret-value',text)
+
 
 if __name__=='__main__':unittest.main()

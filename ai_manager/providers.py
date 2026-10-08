@@ -527,7 +527,10 @@ def query_limits(manager, account):
                     windows = parse_codex(raw)
                     entry['credits']=codex_credits(raw)
                     reset_credits=raw.get('rateLimitResetCredits')
-                    if isinstance(reset_credits,dict):entry['reset_credits_available']=reset_credits.get('availableCount')
+                    if isinstance(reset_credits,dict):
+                        count=reset_credits.get('availableCount')
+                        # The official count is authoritative; detail rows may be capped.
+                        if type(count) is int and count>=0:entry['reset_credits_available']=count
                 entry["source"] = "codex app-server account/rateLimits/read"
             else:
                 # auth status is official, non-interactive and avoids inferring identity
