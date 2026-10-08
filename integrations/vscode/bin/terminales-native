@@ -22,6 +22,10 @@ from pathlib import Path
 OCTAL = re.compile(rb"\\([0-7]{3})")
 
 
+def tmux_command(*args):
+    return ["tmux", "-L", os.environ.get("AI_COMMAND_TMUX_SOCKET", "default"), *args]
+
+
 def decode_output(data):
     return OCTAL.sub(lambda m: bytes([int(m[1], 8)]), data)
 
@@ -67,13 +71,13 @@ def connection(session):
     env.pop("TMUX", None)
     env.pop("TMUX_PANE", None)
     panes = subprocess.check_output(
-        ["tmux", "list-panes", "-t", session + ":", "-F", "#{pane_id}"],
+        tmux_command("list-panes", "-t", session + ":", "-F", "#{pane_id}"),
         env=env, text=True).splitlines()
     if len(panes) != 1:
         raise ValueError("Native tabs require one pane; split terminals in VS Code")
     pane = panes[0]
     process = subprocess.Popen(
-        ["tmux", "-C", "attach-session", "-f", "no-output", "-t", session],
+        tmux_command("-C", "attach-session", "-f", "no-output", "-t", session),
         stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env)
     queue = collections.deque([("attach", None)])
     pending = bytearray()
@@ -224,10 +228,10 @@ def log_event(session, reason):
 
 def session_identity(session):
     try:
-        return subprocess.check_output([
-            "tmux", "display-message", "-p", "-t", session + ":",
+        return subprocess.check_output(tmux_command(
+            "display-message", "-p", "-t", session + ":",
             "#{pid}:#{session_id}:#{session_created}:#{pane_id}"
-        ], stderr=subprocess.DEVNULL, text=True, timeout=3).strip()
+        ), stderr=subprocess.DEVNULL, text=True, timeout=3).strip()
     except (OSError, subprocess.SubprocessError):
         return None
 

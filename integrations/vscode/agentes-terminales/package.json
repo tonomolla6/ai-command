@@ -1,7 +1,7 @@
 {
   "name": "agentes-terminales",
   "displayName": "AI Command Agentes",
-  "version": "0.1.11",
+  "version": "0.1.12",
   "publisher": "ai-command",
   "description": "Estado de los agentes de las terminales persistentes, de un vistazo.",
   "engines": {

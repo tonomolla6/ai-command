@@ -9,10 +9,29 @@ const {processPaths}=require('./process-paths');
 const execute = promisify(execFile);
 const LIMIT = 2 * 1024 * 1024;
 
-async function tmux(args) {
-  const {stdout} = await execute('tmux', args, {timeout:2000,maxBuffer:LIMIT,
+async function tmux(args, socket='default') {
+  try{
+  const {stdout} = await execute('tmux', ['-L',socket,...args], {timeout:2000,maxBuffer:LIMIT,
     env:{...process.env,TMUX:'',TMUX_PANE:''}});
   return stdout.trimEnd();
+  }catch(error){if(/no server running|No such file or directory/.test(error.stderr||''))return '';throw error;}
+}
+
+async function clientSessions(socket) {
+  const text=await tmux(['list-clients','-F','#{client_pid}\t#{session_id}'],socket);
+  const clients=new Map(text.split('\n').filter(Boolean).map(line=>{
+    const [pid,id]=line.split('\t');return [Number(pid),socket+':'+id];
+  }));
+  for(const [pid,id] of [...clients]){
+    try{
+      const status=await fs.readFile(`/proc/${pid}/status`,'utf8');
+      const parent=Number(status.match(/^PPid:\s+(\d+)/m)?.[1]);
+      if(!parent)continue;
+      const command=await fs.readFile(`/proc/${parent}/cmdline`,'utf8');
+      if(command.split('\0').some(arg=>arg.endsWith('/terminales-native')))clients.set(parent,id);
+    }catch{/* A client can disconnect between the snapshot and /proc lookup. */}
+  }
+  return clients;
 }
 
 async function findAgents(pid, depth = 0, procRoot = '/proc') {
@@ -164,25 +183,30 @@ class Tail {
 
 class Monitor {
   constructor({claudeOptions}={}) { this.cache=new Map(); this.tails=new Map(); this.claudeOptions=claudeOptions; }
-  async sample(keys) {
-    const format='#{pane_id}\t#{pane_pid}\t#{@ai_command_vscode_key}\t#{@ai_command_agent_mark}\t#{@ai_command_vscode_workspace}';
-    const panes=(await tmux(['list-panes','-a','-F',format])).split('\n').map(line=>{
-      const [pane,pid,key,raw,workspace]=line.split('\t');
+  async sample(keys, bindings) {
+    const sockets=process.env.AI_COMMAND_TMUX_SOCKET?[process.env.AI_COMMAND_TMUX_SOCKET]:['default','ai-command'];
+    const clientMaps=bindings?await Promise.all(sockets.map(clientSessions)):[];
+    const clients=new Map(clientMaps.flatMap(map=>[...map]));
+    const format='#{pane_id}\t#{pane_pid}\t#{@ai_command_vscode_key}\t#{@ai_command_agent_mark}\t#{@ai_command_vscode_workspace}\t#{session_id}';
+    const snapshots=await Promise.all(sockets.map(async socket=>(await tmux(['list-panes','-a','-F',format],socket)).split('\n').filter(Boolean).map(line=>{
+      const [pane,pid,persistentKey,raw,workspace,session]=line.split('\t');
+      const key=bindings?[...bindings].find(([_,pid])=>clients.get(pid)===socket+':'+session)?.[0]:persistentKey;
       let mark; try { mark=JSON.parse(raw); } catch {}
-      return {pane,pid:Number(pid),key,mark,workspace};
-    }).filter(p=>keys.has(p.key));
+      return {pane,pid:Number(pid),key,mark,workspace,socket,identity:socket+':'+pane};
+    })));
+    const panes=snapshots.flat().filter(p=>keys.has(p.key));
     const result=new Map();
     const used=new Set();
     for(const pane of panes) {
       if(result.has(pane.key)) { result.set(pane.key,{status:'unknown',detail:'Varios paneles tmux'}); continue; }
       const now=Date.now();
-      let agent=this.cache.get(pane.pane);
+      let agent=this.cache.get(pane.identity);
       if(!agent || now-agent.checked>5000 || agent.panePid!==pane.pid) {
         const agents=await findAgents(pane.pid);
         const {pid,engine}=agents.length===1?agents[0]:{};
         let path; if(pid&&engine==='codex') { try { path=await transcript(pid); } catch {} }
         agent={pid,engine,path,checked:now,panePid:pane.pid,ambiguous:agents.length>1};
-        this.cache.set(pane.pane,agent);
+        this.cache.set(pane.identity,agent);
       }
       let row={...pane,status:agent.pid||agent.ambiguous?'unknown':'off',agentPid:agent.pid,engine:agent.engine};
       if(agent.engine==='claude')row={...row,...await readClaude(agent.pid,this.claudeOptions)};
@@ -199,7 +223,7 @@ class Monitor {
         // Current activity and blocking approval controls are direct evidence,
         // even if a resumed session has no observable rollout descriptor.
         try {
-          const screen=await tmux(['capture-pane','-p','-t',pane.pane]);
+          const screen=await tmux(['capture-pane','-p','-t',pane.pane],pane.socket);
           row.status=visibleStatus(row.status,screen);
         } catch { /* Preserve a status confirmed by the transcript. */ }
         if(!agent.path)row.detail='No se ha podido asociar el registro de esta sesión de Codex';
@@ -207,7 +231,7 @@ class Monitor {
       result.set(pane.key,row);
     }
     for(const path of this.tails.keys()) if(!used.has(path)) this.tails.delete(path);
-    for(const pane of this.cache.keys()) if(!panes.some(p=>p.pane===pane)) this.cache.delete(pane);
+    for(const pane of this.cache.keys()) if(!panes.some(p=>p.identity===pane)) this.cache.delete(pane);
     return result;
   }
 }

@@ -2,9 +2,15 @@
 const { Monitor }=require('./monitor');
 const {NativeLayout}=require('./native-layout');
 const LABELS={working:'Trabajando',done:'Terminado',attention:'Necesita atención',unknown:'Estado no confirmado',off:'Sin agente activo'};
+const terminalKeys=new WeakMap();
+let nextTerminal=0;
 const keyOf=t=>{
   const arg=t.creationOptions?.shellArgs?.[0];
-  return typeof arg==='string'?/^vsc-(?:tab|resume)-([a-f0-9]{32})$/.exec(arg)?.[1]:undefined;
+  if(typeof arg!=='string'||!/^vsc-(?:tab|resume)-[a-f0-9]{32}$|^vscode-[a-f0-9]{32}$/.test(arg))return;
+  // Native Split clones shellArgs: a tab's UI identity belongs to the Terminal
+  // object, while its tmux identity is obtained from the actual client PID.
+  if(!terminalKeys.has(t))terminalKeys.set(t,'terminal-'+(++nextTerminal));
+  return terminalKeys.get(t);
 };
 const cwdOf=t=>{
   const cwd=t.creationOptions?.cwd;
@@ -48,8 +54,10 @@ class AgentsView {
         const key=keyOf(t);
         if(key&&!allTerminals.has(key))allTerminals.set(key,t);
       }
-      const allStates=allTerminals.size?await this.monitor.sample(new Set(allTerminals.keys())):new Map();
+      const bindings=new Map(await Promise.all([...allTerminals].map(async([key,t])=>[key,await Promise.race([t.processId,new Promise(r=>setTimeout(r,500))])])));
+      const allStates=allTerminals.size?await this.monitor.sample(new Set(allTerminals.keys()),bindings):new Map();
       const terminals=new Map([...allTerminals].filter(([key,t])=>belongsToWorkspace(t,this.vscode,allStates.get(key))));
+      this.terminals=terminals;
       const states=new Map([...allStates].filter(([key])=>terminals.has(key)));
       const currentGroups=await this.layout?.sample(terminals);
       this.orderSynced=!!currentGroups;

@@ -7,7 +7,8 @@ const ROOT = process.env.AI_COMMAND_WORKSPACE_ROOT || require('node:os').homedir
 // A relative shellPath can be replaced by VS Code's default profile during
 // resolution. Own the helper pair and preserve the exact persistent key.
 const LAUNCHER = process.env.AI_COMMAND_TERMINALES_TEST_LAUNCHER || path.join(__dirname, 'bin', 'terminales');
-const identity = session => session.id + ':' + session.created;
+const reference = session => session.ref || session.id;
+const identity = session => reference(session) + ':' + session.created;
 const clean = value => String(value || '').replace(/[\x00-\x1f\x7f]/g, ' ').slice(0, 200).trim();
 
 function workspaceRoots(vscode) {
@@ -45,7 +46,7 @@ class Controller {
       name: 'Terminal', shellPath: LAUNCHER, shellArgs: [(recovering ? 'vsc-resume-' : 'vsc-tab-') + key], cwd: this.workspaceRoot(),
       env: { TMUX: null, TMUX_PANE: null, NO_COLOR: null, AI_COMMAND_TERMINALES_NATIVE: '1',
         AI_COMMAND_TERMINAL_CWD: this.workspaceRoot() },
-      isTransient: true,
+      isTransient: false,
     };
   }
 
@@ -87,11 +88,27 @@ class Controller {
     return this.syncing;
   }
 
+  async saveLayout() {
+    const extension=this.vscode.extensions?.getExtension('ai-command.agentes-terminales');
+    if(!extension?.isActive)return;
+    const view=extension.exports?.provider;
+    if(!view?.orderSynced||!view.lastGroups||!view.terminals)return;
+    // The native layout snapshot is complete and PID-bound. Never invent split
+    // groups from terminal creation order or from a stale, partial snapshot.
+    for(const [index,group] of view.lastGroups.entries())for(const key of group){
+      const record=this.tracked.get(view.terminals.get(key));
+      if(record&&record.savedGroup!==index){
+        await this.backend.set(record.session,'@ai_command_vscode_group',index);
+        record.session.group=index;record.savedGroup=index;
+      }
+    }
+  }
+
   async doSync() {
     const [sessions, clients] = await Promise.all([this.backend.sessions(), this.backend.clients()]);
-    const byId = new Map(sessions.filter(session => this.allowed(session)).map(session => [session.id, session]));
+    const byId = new Map(sessions.filter(session => this.allowed(session)).map(session => [reference(session), session]));
     for (const [terminal, record] of this.tracked) {
-      const current = byId.get(record.session.id);
+      const current = byId.get(reference(record.session));
       if (!current || identity(current) !== identity(record.session)) this.tracked.delete(terminal);
     }
     for (const terminal of this.vscode.window.terminals) {
@@ -105,8 +122,8 @@ class Controller {
         // A visible terminal is authoritative after changing workspace: adopt
         // its existing tmux session into the workspace showing that tab.
         const session = byId.get(clientSessionId) ||
-          (clientSessionId ? sessions.find(s => s.id === clientSessionId) : undefined) ||
-          sessions.find(s => key && s.key === key && this.allowed(s));
+          (clientSessionId ? sessions.find(s => reference(s) === clientSessionId) : undefined) ||
+          sessions.find(s => Number.isInteger(pid) && s.launcherPid === pid && this.allowed(s));
         if (!session || this.closed.has(terminal)) continue;
         if (!this.allowed(session)) {
           if (!clientSessionId) continue;
@@ -125,7 +142,8 @@ class Controller {
         }
         // Algunas pestañas revividas reciben el título original del perfil.
         // Recuperar la etiqueta guardada antes de permitir que sync la sobrescriba.
-        if (session.key) await this.restoreLabel(terminal, session.label);
+        // Background adoption must not select tabs or steal the user's Split
+        // target. Restored tabs already receive their saved name at creation.
         record = { session, savedLabel: session.label, savedOrder: session.order };
         this.tracked.set(terminal, record);
         await this.backend.set(session, '@ai_command_vscode_workspace', this.workspaceRoot());
@@ -133,6 +151,7 @@ class Controller {
       }
       if (!this.closed.has(terminal)) await this.save(terminal, record);
     }
+    await this.saveLayout();
   }
 
   restore(legacyOnly = false) {
@@ -141,8 +160,10 @@ class Controller {
     return this.restoring;
   }
 
-  start() {
-    // Reconnection must only attach clients, never relaunch live terminals.
+  async start() {
+    // Let VS Code revive its tab/split layout before filling missing tmux tabs.
+    // Reconnection never relaunches working agents.
+    await new Promise(resolve=>setTimeout(resolve,1500));
     return this.restore();
   }
 
@@ -154,19 +175,25 @@ class Controller {
     sessions.sort((a, b) => a.order - b.order || a.name.localeCompare(b.name, undefined, { numeric: true }));
     let restored = 0;
     let first;
+    const groups=new Map();
+    for(const [terminal,record] of this.tracked)if(record.session.group!==undefined&&!groups.has(record.session.group))groups.set(record.session.group,terminal);
     for (const session of sessions) {
       if (represented.has(identity(session))) continue;
-      const key = await this.backend.persistentKey(session);
+      const key=await this.backend.persistentKey(session);
+      const options=this.newOptions(key,true);
+      if(session.socket)options.env.AI_COMMAND_TMUX_SOCKET=session.socket;
+      if(session.group!==undefined&&groups.has(session.group))options.location={parentTerminal:groups.get(session.group)};
       const terminal = this.vscode.window.createTerminal({
-        ...this.newOptions(key, true), name: session.label || session.name,
+        ...options, name: session.label || session.name,
       });
       this.tracked.set(terminal, { session, savedLabel: session.label, savedOrder: session.order, recovered: true });
+      if(session.group!==undefined&&!groups.has(session.group))groups.set(session.group,terminal);
       represented.add(identity(session));
       await this.backend.set(session, '@ai_command_vscode_workspace', this.workspaceRoot());
       first ||= terminal;
       restored++;
     }
-    if (first) first.show(true);
+    if (first && !this.vscode.window.activeTerminal) first.show(true);
     this.report(`Recuperadas ${restored} terminales; conservados los procesos tmux.`);
     return restored;
   }
@@ -224,9 +251,11 @@ class Controller {
     }
     attempts.push(now);
     this.recoveryAttempts.set(identity(current), attempts);
-    const key = await this.backend.persistentKey(current);
+    const key=await this.backend.persistentKey(current);
+    const options=this.newOptions(key,true);
+    if(current.socket)options.env.AI_COMMAND_TMUX_SOCKET=current.socket;
     if (this.disposed) return;
-    const recovered = this.vscode.window.createTerminal({ ...this.newOptions(key, true), name: current.label || current.name });
+    const recovered = this.vscode.window.createTerminal({ ...options, name: current.label || current.name });
     this.tracked.set(recovered, { session: current, savedLabel: current.label, savedOrder: current.order, recovered: true });
     this.report('Terminal recuperada tras salida del cliente; proceso conservado: ' + current.name);
   }
@@ -242,9 +271,8 @@ class Controller {
       let session = record?.session;
       if (!session) {
         // A tab can be deleted before the first sync, after its client has exited.
-        const arg = terminal.creationOptions?.shellArgs?.[0];
-        const key = typeof arg === 'string' ? /^vsc-(?:tab|resume)-([a-f0-9]{32})$/.exec(arg)?.[1] || '' : '';
-        if (key) session = (await this.backend.sessions()).find(s => s.key === key && this.allowed(s));
+        const pid=await processIdWithin(terminal);
+        if(Number.isInteger(pid))session=(await this.backend.sessions()).find(s=>s.launcherPid===pid&&this.allowed(s));
       }
       if (session) {
         await this.backend.kill(session);
@@ -263,6 +291,7 @@ class Controller {
 
   async flush() {
     if (this.syncing) await this.syncing;
+    await this.saveLayout();
     const existing = new Set((await this.backend.sessions()).map(identity));
     for (const [terminal, record] of this.tracked) {
       if (existing.has(identity(record.session))) await this.save(terminal, record);

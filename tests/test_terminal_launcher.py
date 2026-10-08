@@ -10,10 +10,10 @@ import unittest
 @unittest.skipUnless(shutil.which('bash') and shutil.which('flock'), 'Linux terminal helpers required')
 class TerminalLauncherTests(unittest.TestCase):
     def run_launcher(self, root, script):
-        binary=root/'bin/tmux';binary.parent.mkdir();binary.write_text(script);binary.chmod(0o755)
+        binary=root/'bin/tmux';binary.parent.mkdir();script=script.replace('#!/bin/sh\n','#!/bin/sh\nif [ "$1" = -L ]; then shift 2; fi\n',1);binary.write_text(script);binary.chmod(0o755)
         launcher=Path(__file__).resolve().parent.parent/'integrations/vscode/bin/terminales'
         env={'HOME':str(root),'PATH':str(binary.parent)+':'+os.defpath,'TERM':'xterm-256color',
-             'AI_COMMAND_TERMINALES_NATIVE':'1'}
+             'AI_COMMAND_TERMINALES_NATIVE':'1','AI_COMMAND_TMUX_SOCKET':'fixture'}
         master,slave=pty.openpty()
         try:
             process=subprocess.Popen(['/bin/bash',str(launcher),'vsc-resume-'+'a'*32],

@@ -17,3 +17,5 @@ config.local.json
 *.bundle
 limits.json
 cookies.json
+node_modules/
+.vscode-test/

@@ -27,7 +27,7 @@ async function activate(context) {
   if (hasWorkspace && vscode.workspace.getConfiguration('aiCommandTerminales').get('autoRestore', true)) {
     await controller.start();
     const config = vscode.workspace.getConfiguration('terminal.integrated');
-    await config.update('enablePersistentSessions', false, vscode.ConfigurationTarget.Global);
+    await config.update('enablePersistentSessions', true, vscode.ConfigurationTarget.Global);
     await config.update('rightClickBehavior', 'copyPaste', vscode.ConfigurationTarget.Global);
     await config.update('copyOnSelection', false, vscode.ConfigurationTarget.Global);
     await config.update('scrollback', 50000, vscode.ConfigurationTarget.Global);
@@ -36,7 +36,7 @@ async function activate(context) {
     await config.update('commandsToSkipShell', skip, vscode.ConfigurationTarget.Global);
   }
   report('Integracion nativa activada: tmux conserva procesos; VS Code gestiona pantalla, scroll y seleccion.');
-  return { ready: true, migrate: () => controller.migrate() };
+  return { ready: true, controller, migrate: () => controller.migrate() };
 }
 
 async function deactivate() {

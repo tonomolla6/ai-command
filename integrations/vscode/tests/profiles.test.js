@@ -32,10 +32,17 @@ test('monitor and persistent terminals use the tmux chosen in PATH',async()=>{
   const key='a'.repeat(32);
   await fs.writeFile(binary,'#!'+process.execPath+'\nconsole.log(process.argv.includes("list-panes")?'+
    JSON.stringify('%1\t99999999\t'+key+'\t\t/home/test')+':"selected-tmux");\n',{mode:0o755});
-  process.env.PATH=root+path.delimiter+previous;
+  process.env.PATH=root+path.delimiter+previous;process.env.AI_COMMAND_TMUX_SOCKET='fixture';
   const backend=new Tmux(process.env);assert.equal(await backend.run(['-V']),'selected-tmux');
   const rows=await new Monitor().sample(new Set([key]));assert.equal(rows.get(key).status,'off');
- }finally{process.env.PATH=previous;await fs.rm(root,{recursive:true});}
+ }finally{process.env.PATH=previous;delete process.env.AI_COMMAND_TMUX_SOCKET;await fs.rm(root,{recursive:true});}
+});
+
+test('the graphical view distinguishes Split terminals with identical launch arguments',()=>{
+ const {keyOf}=require('../agentes-terminales/view');
+ const options={shellArgs:['vscode-'+'a'.repeat(32)]};
+ const parent={creationOptions:options},child={creationOptions:options};
+ assert.notEqual(keyOf(parent),keyOf(child));assert.equal(keyOf(parent),keyOf(parent));
 });
 
 test('process paths return only the selected account directories',async()=>{

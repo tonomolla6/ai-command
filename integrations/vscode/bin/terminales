@@ -3,6 +3,18 @@
 set -euo pipefail
 DEFAULT_ROOT="${AI_COMMAND_WORKSPACE_ROOT:-$HOME}"
 [[ -d "$DEFAULT_ROOT" ]] || DEFAULT_ROOT="$HOME"
+# Never restart an older server that still owns working processes. New tabs
+# use the upgraded binary in an independent socket; old tabs retain theirs.
+if [[ -z "${AI_COMMAND_TMUX_SOCKET:-}" ]]; then
+  server_version=$(command tmux -L default display-message -p '#{version}' 2>/dev/null || true)
+  AI_COMMAND_TMUX_SOCKET=default
+  if [[ "$server_version" =~ ^([0-9]+)\.([0-9]+) ]] && \
+      (( BASH_REMATCH[1] < 3 || BASH_REMATCH[1] == 3 && BASH_REMATCH[2] < 6 )); then
+    AI_COMMAND_TMUX_SOCKET=ai-command
+  fi
+fi
+export AI_COMMAND_TMUX_SOCKET
+tmux() { command tmux -L "$AI_COMMAND_TMUX_SOCKET" "$@"; }
 
 usage() {
   cat <<'HELP'
@@ -105,7 +117,7 @@ recover_terminal() {
 }
 
 restore_vscode_terminal() {
-  local ticket=${mode#vscode-} claim resume_lock session_id created current
+  local ticket=${mode#vscode-} claim used resume_lock session_id created current
   if [[ ! "$ticket" =~ ^[a-f0-9]{32}$ ]]; then
     printf 'Identificador de recuperacion no valido.\n' >&2
     exit 2
@@ -116,6 +128,8 @@ restore_vscode_terminal() {
   timeout 5 tmux wait-for -L "$resume_lock"
   trap 'tmux wait-for -U "$resume_lock" >/dev/null 2>&1 || true' EXIT
   claim=$(tmux show-option -gqv "@ai_command_resume_$ticket")
+  used=$(tmux show-option -gqv "@ai_command_used_$ticket")
+  if [[ -n "$claim" ]]; then tmux set-option -g "@ai_command_used_$ticket" "$claim"; fi
   tmux set-option -guq "@ai_command_resume_$ticket"
   tmux wait-for -U "$resume_lock"
   trap - EXIT
@@ -129,7 +143,18 @@ restore_vscode_terminal() {
       return
     fi
   fi
-  new_terminal
+  # Split can reuse a consumed ticket, but a lost server cannot fabricate tabs.
+  if [[ -z "$claim" && "$used" =~ ^[$][0-9]+:[0-9]+$ ]]; then
+    session_id=${used%%:*};created=${used#*:}
+    current=$(tmux display-message -p -t "$session_id:" '#{session_created}' 2>/dev/null || true)
+    if [[ "$current" == "$created" ]]; then
+      new_terminal "${AI_COMMAND_TERMINAL_CWD:-${PWD:-$DEFAULT_ROOT}}"
+      tmux set-option -t "$target" @ai_command_vscode_key "$(python3 -c 'import secrets; print(secrets.token_hex(16))')"
+      return
+    fi
+  fi
+  printf 'La sesion tmux original ya no existe. Usa ai resume para recuperar la conversacion guardada.\n' >&2
+  exit 69
 }
 
 persistent_vscode_terminal() {
@@ -177,13 +202,14 @@ esac
 
 tmux set-option -t "$target" @ai_command_interactive 1
 tmux set-option -t "$target" @ai_command_auto_restore 1
+tmux set-option -t "$target" @ai_command_vscode_launcher_pid "$$"
 native_mode=$(tmux show-option -t "$target" -qv @ai_command_native)
 server_version=$(tmux display-message -p -t "$target:" '#{version}')
 # Native reconnection crashed the 3.4 server during a real reload. Preserve
-# its processes using classic clients; the control renderer is tested on 3.7.
+# its processes using classic clients; the control renderer is tested on 3.6 and 3.7.
 native_supported=0
 if [[ "$server_version" =~ ^([0-9]+)\.([0-9]+) ]] && \
-    (( BASH_REMATCH[1] > 3 || BASH_REMATCH[1] == 3 && BASH_REMATCH[2] >= 7 )); then
+    (( BASH_REMATCH[1] > 3 || BASH_REMATCH[1] == 3 && BASH_REMATCH[2] >= 6 )); then
   native_supported=1
 fi
 if [[ "${native_mode:-${AI_COMMAND_TERMINALES_NATIVE:-0}}" == 1 && "$native_supported" == 1 ]]; then
@@ -191,6 +217,6 @@ if [[ "${native_mode:-${AI_COMMAND_TERMINALES_NATIVE:-0}}" == 1 && "$native_supp
   exec python3 "${AI_COMMAND_TERMINALES_NATIVE_HELPER:-$(dirname -- "$0")/terminales-native}" "$target"
 fi
 if [[ -n "${TMUX:-}" ]]; then
-  exec tmux switch-client -t "$target"
+  exec tmux -L "$AI_COMMAND_TMUX_SOCKET" switch-client -t "$target"
 fi
-exec tmux attach-session -t "$target"
+exec tmux -L "$AI_COMMAND_TMUX_SOCKET" attach-session -t "$target"
