@@ -75,7 +75,11 @@ class Controller {
       await this.backend.set(record.session, '@ai_command_vscode_label', label);
       record.savedLabel = label;
     }
-    const order = this.vscode.window.terminals.indexOf(terminal);
+    const view=this.vscode.extensions?.getExtension('ai-command.agentes-terminales');
+    const ui=view?.isActive?view.exports?.provider:undefined;
+    const layoutKey=ui?.terminals?[...ui.terminals].find(([,t])=>t===terminal)?.[0]:undefined;
+    const graphicalOrder=ui?.orderSynced&&layoutKey?ui.lastGroups?.flat().indexOf(layoutKey):-1;
+    const order = graphicalOrder>=0?graphicalOrder:this.vscode.window.terminals.indexOf(terminal);
     if (order >= 0 && order !== record.savedOrder) {
       await this.backend.set(record.session, '@ai_command_vscode_order', order);
       record.savedOrder = order;
@@ -194,6 +198,7 @@ class Controller {
       restored++;
     }
     if (first && !this.vscode.window.activeTerminal) first.show(true);
+    this.lastRestored=restored;
     this.report(`Recuperadas ${restored} terminales; conservados los procesos tmux.`);
     return restored;
   }

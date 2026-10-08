@@ -81,3 +81,15 @@ test('a Split cloned key is bound to its own client and cannot close the parent'
  child.exitStatus={reason:vscode.TerminalExitReason.User};await controller.close(child);
  assert.deepEqual(killed,[split]);assert.equal(controller.tracked.get(parent).session.id,session.id);
 });
+
+
+test('joined pane order is saved from the graphical layout rather than creation order',async()=>{
+ const {controller,session,vscode}=fixture();const saved=[];
+ const first={name:'First'},second={name:'Second'},last={name:'Last'};
+ vscode.window.terminals.push(first,second,last);
+ const provider={orderSynced:true,terminals:new Map([['first',first],['second',second],['last',last]]),lastGroups:[['first'],['last','second']]};
+ vscode.extensions={getExtension:()=>({isActive:true,exports:{provider}})};
+ controller.backend.set=async(_,option,value)=>saved.push([option,value]);
+ await controller.save(second,{session,savedLabel:second.name,savedOrder:1});
+ assert.deepEqual(saved,[['@ai_command_vscode_order',2]],'Join may reverse two tabs created in the opposite order');
+});
