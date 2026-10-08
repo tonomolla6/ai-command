@@ -295,6 +295,10 @@ y recarga la ventana. La detección usa perfiles del proceso, sin leer credencia
 ni escribir en otras terminales. El adaptador de orden depende de detalles internos
 de VS Code; ante incompatibilidades conserva un estado desconocido.
 Después de actualizar las extensiones incluidas, vuelve a ejecutar `ai vscode-install`.
+La extensión de terminales incluye su propia pareja de lanzadores y usa una ruta
+absoluta: conserva la clave de cada pestaña al recuperar y no depende de otro
+comando `terminales` instalado en PATH. Las pestañas que revive VS Code se adoptan;
+si llegan después de la recuperación, se cierra sólo el cliente adicional.
 
 La [skill ai-command](skills/ai-command/SKILL.md) enseña a un agente a dar altas,
 consultar uso y administrar versiones mediante estos comandos. Puedes copiar su
@@ -318,7 +322,7 @@ los perfiles de los CLI oficiales; no se escriben en logs del gestor.
 
 ```bash
 python3 -m unittest discover -s tests -q
-node --test integrations/vscode/tests/profiles.test.js
+node --test integrations/vscode/tests/*.test.js
 python3 scripts/build_release.py --out /tmp/ai-command-release
 ```
 

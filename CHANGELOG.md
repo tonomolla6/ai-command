@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- La extensión de terminales incluye sus lanzadores y usa una ruta absoluta para conservar la clave al restaurar; evita que otro perfil o un comando antiguo en PATH abra sesiones vacías adicionales.
 - Consulta Claude `/usage` sin interacción cuando el ejecutable instalado declara soporte local, incluso después de una actualización; conserva PTY para formatos desconocidos y exige cero turnos y coste.
 - Los perfiles OAuth vacíos aparecen como `SIN LOGIN`, con el comando de login correspondiente.
 - VS Code identifica el proceso nativo detrás de los lanzadores `ai`/Python y usa el tmux de PATH. Las extensiones anteriores se retiran del registro con backup, conservando sus archivos.
