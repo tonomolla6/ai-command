@@ -60,7 +60,10 @@ class Tmux {
 
   async nativeConnected(session) {
     const text = await this.run(['list-clients', '-t', session.id, '-F', '#{client_pid}'], true,session.socket);
-    for (const pid of text.split('\n').filter(Boolean)) {
+    const version=await this.run(['display-message','-p','-t',session.id+':','#{version}'],true,session.socket);
+    const [major,minor]=version.split('.').map(Number);
+    const modern=major>3||major===3&&minor>=6;
+    for (const pid of modern?text.split('\n').filter(Boolean):[]) {
       try {
         const status = await readFile(`/proc/${pid}/status`, 'utf8');
         const parent = Number(status.match(/^PPid:\s+(\d+)/m)?.[1]);

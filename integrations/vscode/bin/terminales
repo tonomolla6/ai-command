@@ -51,7 +51,7 @@ fi
 case "${1:-}" in
   ayuda|-h|--help) usage; exit 0 ;;
   lista|--list)
-    exec tmux list-sessions -F '#{session_name}: #{session_windows} ventanas, #{session_attached} conexiones'
+    exec tmux -L "$AI_COMMAND_TMUX_SOCKET" list-sessions -F '#{session_name}: #{session_windows} ventanas, #{session_attached} conexiones'
     ;;
 esac
 
