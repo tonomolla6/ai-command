@@ -299,12 +299,22 @@ La extensión de terminales incluye su propia pareja de lanzadores y usa una rut
 absoluta: conserva la clave de cada pestaña al recuperar y no depende de otro
 comando `terminales` instalado en PATH. Las pestañas que revive VS Code se adoptan;
 si llegan después de la recuperación, se cierra sólo el cliente adicional.
-La restauración pertenece al gestor: desactiva la recuperación nativa de VS Code
-y sus clientes son transitorios, mientras los procesos permanecen en tmux. Al
-reconectar sólo se adjunta a claves existentes; una sesión desaparecida muestra
-un aviso para usar `ai resume`, sin fabricar otra shell vacía. No relanza clientes
-de trabajo durante el arranque. El renderizado de control usa tmux 3.7 o posterior;
-con versiones anteriores conserva el cliente clásico.
+VS Code conserva las pestañas y sus grupos Split/Join; tmux conserva los procesos.
+Al reconectar se adoptan las pestañas recuperadas y se adjuntan sólo las sesiones
+que falten. Una sesión desaparecida muestra un aviso para usar `ai resume`, sin
+fabricar otra shell vacía. El arranque no relanza agentes ni cambia la pestaña
+seleccionada: Split utiliza la terminal seleccionada.
+
+El renderizado nativo usa control mode con tmux 3.6 o posterior. Los servidores
+3.2–3.5 que aún tienen agentes activos usan una conexión `pipe-pane` privada, sin
+reiniciarlos ni guardar su salida. Si existe otro pipe, se conserva. Los nuevos
+perfiles pueden usar una instancia separada del tmux actualizado. Codex se lanza
+con `--no-alt-screen` y Claude con su opción de pantalla alternativa desactivada,
+para que funcionen el scroll y la selección normales de VS Code.
+
+Reiniciar VS Code conserva los procesos mientras el servidor sigue encendido.
+Reiniciar el servidor termina los procesos: la continuación se hace con el
+comando oficial de resume y el historial guardado.
 
 La [skill ai-command](skills/ai-command/SKILL.md) enseña a un agente a dar altas,
 consultar uso y administrar versiones mediante estos comandos. Puedes copiar su
@@ -330,6 +340,16 @@ los perfiles de los CLI oficiales; no se escriben en logs del gestor.
 python3 -m unittest discover -s tests -q
 node --test integrations/vscode/tests/*.test.js
 python3 scripts/build_release.py --out /tmp/ai-command-release
+```
+
+La prueba gráfica usa tres ventanas reales de VS Code, un HOME temporal y su
+propio servidor tmux: comprueba Split, Join, tamaños de paneles, scroll y dos
+reinicios sin duplicar terminales. Ejecútala con Node 22+, tmux y Xvfb instalados:
+
+```bash
+cd integrations/vscode/terminales-persistentes
+npm install --ignore-scripts
+npm run test:vscode
 ```
 
 Los tests no necesitan cuentas ni llamadas al modelo. [CHANGELOG](CHANGELOG.md) ·

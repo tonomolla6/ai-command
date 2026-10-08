@@ -2,7 +2,9 @@
 
 ## Unreleased
 
-- Una sola restauración de terminales, gestionada por tmux: clientes transitorios, recuperación con clave existente y sin relanzar procesos al arrancar. Las sesiones perdidas se notifican y tmux anterior a 3.7 usa el cliente clásico.
+- VS Code conserva las pestañas y grupos Split/Join; tmux conserva los agentes. La recuperación usa claves existentes, adopta pestañas revividas y evita terminales vacías adicionales y cambios de foco.
+- Resume nativo de Claude resuelve conversaciones de otros perfiles por su ruta original, sin compartir credenciales. Codex y Claude conservan scroll normal.
+- Conexión privada para servidores tmux 3.2–3.5 activos, sin control clients ni reiniciar agentes. Pruebas reales de PTY y VS Code con dos reinicios, Split, Join y scroll.
 - La extensión de terminales incluye sus lanzadores y usa una ruta absoluta para conservar la clave al restaurar; evita que otro perfil o un comando antiguo en PATH abra sesiones vacías adicionales.
 - Consulta Claude `/usage` sin interacción cuando el ejecutable instalado declara soporte local, incluso después de una actualización; conserva PTY para formatos desconocidos y exige cero turnos y coste.
 - Los perfiles OAuth vacíos aparecen como `SIN LOGIN`, con el comando de login correspondiente.
