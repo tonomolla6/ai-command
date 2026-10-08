@@ -11,6 +11,7 @@ import tempfile
 import termios
 import time
 import unittest
+from unittest.mock import patch
 
 from ai_manager.cli import limits,parser
 from ai_manager.core import Manager,ManagerError,private_dir,write_json
@@ -100,7 +101,8 @@ class MonitoringTests(unittest.TestCase):
         self.assertTrue(parser().parse_args(['usage','claude','--monitoring']).monitoring)
         self.assertTrue(parser().parse_args(['limits','--monitoring']).monitoring)
         for argv in (['usage','--monitoring','--json'],['usage','--monitoring','--cached'],['usage','--monitoring']):
-            with self.subTest(argv=argv),self.assertRaises(ManagerError):limits(self.manager,parser().parse_args(argv))
+            with self.subTest(argv=argv),patch('ai_manager.monitoring.sys.stdin.isatty',return_value=False),\
+                 self.assertRaises(ManagerError):limits(self.manager,parser().parse_args(argv))
         self.assertFalse((self.manager.state/'events.txt').exists())
 
     def test_cached_cards_remain_visible_while_refresh_is_running_and_q_restores_terminal(self):
