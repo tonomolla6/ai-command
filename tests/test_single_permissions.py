@@ -70,6 +70,10 @@ class SinglePermissionsTests(unittest.TestCase):
         self.assertEqual(single_tool_arguments(self.manager,'agy',['--dangerously-skip-permissions=false','--prompt','--help']),
                          ['--dangerously-skip-permissions','--prompt','--help'])
         self.assertEqual(single_tool_arguments(self.manager,'opencode',['--','--auto=false']),['--auto','--','--auto=false'])
+        self.assertEqual(single_tool_arguments(self.manager,'agy',['--sandbox','--sandbox=true','--conversation','demo']),
+                         ['--dangerously-skip-permissions','--conversation','demo'])
+        self.assertEqual(single_tool_arguments(self.manager,'agy',['--prompt','--sandbox']),
+                         ['--dangerously-skip-permissions','--prompt','--sandbox'])
 
     def test_configure_backs_up_and_only_changes_selected_policies(self):
         self.manager.config_dir.mkdir(parents=True)

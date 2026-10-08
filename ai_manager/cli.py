@@ -24,7 +24,7 @@ from .registry import add_account, rename_account, save_registry, sync_identity,
 from .ui import colored, render_usage, activity_lines, compact_tokens
 from .single_tools import SINGLE_TOOLS, current_tools, launch_tool, models, list_tool_sessions, local_activity
 from .claude_setup import repair_onboarding
-from .permissions import claude_danger_enabled, claude_arguments
+from .permissions import claude_danger_enabled, claude_arguments, codex_arguments
 from .migrations import migrate, CURRENT
 from .core import private_dir, write_json
 from . import __version__
@@ -172,6 +172,7 @@ def launch(manager,args,resume=False,session=None):
         if args.provider=="claude":command.append(prompt)
         else:command.extend(["-c","developer_instructions="+json.dumps(prompt)])
     command.extend(extras)
+    if args.provider=='codex':command=[command[0],*codex_arguments(manager,command[1:])]
     danger = args.provider == 'claude' and claude_danger_enabled(manager)
     if danger:command=[command[0], *claude_arguments(command[1:])]
     if getattr(args,"dry_run",False):
@@ -265,7 +266,7 @@ def login(manager,args):
 def doctor(manager,args):
     problems=[];warnings=[]
     print(colored("AI DOCTOR · diagnóstico",'title'))
-    for provider in ('claude','agy','opencode'):
+    for provider in ('codex','claude','agy','opencode'):
         print(provider+' auto-approve: '+('ON' if manager.config.get(provider+'_skip_permissions',False) else 'OFF'))
     from .provider_updates import configure_cron
     print('Actualizaciones periódicas CLI: '+('ON · cada 6 horas' if configure_cron(manager,'status') else 'OFF'))
@@ -387,7 +388,7 @@ def parser():
     mode=a.add_mutually_exclusive_group();mode.add_argument('--check',action='store_true');mode.add_argument('--cron',choices=['on','off','status']);mode.add_argument('--scheduled',action='store_true')
     a.add_argument('--json',action='store_true')
     a=sub.add_parser('configure',help='Preferencias del gestor')
-    for provider in ('claude','agy','opencode'):a.add_argument('--'+provider+'-danger',choices=['on','off'])
+    for provider in ('codex','claude','agy','opencode'):a.add_argument('--'+provider+'-danger',choices=['on','off'])
     a=sub.add_parser('native',help='CLI original de AGY/OpenCode con tu política de permisos')
     a.add_argument('provider',choices=list(SINGLE_TOOLS))
     a.add_argument('arguments',nargs=argparse.REMAINDER)
@@ -491,9 +492,9 @@ def main(argv=None):
         migrate(manager)
         manager.require_setup()
         if args.command=='configure':
-            policies={provider:getattr(args,provider+'_danger') for provider in ('claude','agy','opencode')
+            policies={provider:getattr(args,provider+'_danger') for provider in ('codex','claude','agy','opencode')
                       if getattr(args,provider+'_danger') is not None}
-            if not policies:raise ManagerError('Elige --claude-danger, --agy-danger o --opencode-danger on/off')
+            if not policies:raise ManagerError('Elige --codex-danger, --claude-danger, --agy-danger o --opencode-danger on/off')
             with manager.lock('registry',timeout=15):
                 backup_files(manager.home,[manager.config_path],'Change explicit provider permission policies')
                 manager.config=read_json(manager.config_path)

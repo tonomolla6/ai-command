@@ -5,7 +5,8 @@ import json
 
 from .core import Manager, ManagerError
 from .providers import executable
-from .permissions import claude_arguments, claude_danger_enabled, is_claude_launch, single_tool_arguments
+from .permissions import (claude_arguments, claude_danger_enabled, codex_arguments,
+                          is_claude_launch, is_codex_launch, single_tool_arguments)
 from .automatic import account_override
 
 
@@ -26,7 +27,8 @@ def single_provider_main(provider, argv=None):
 def provider_main(provider, argv=None):
     argv = list(sys.argv[1:] if argv is None else argv)
     managed_flags = {'--ai-new': '--new', '--ai-dry-run': '--dry-run'}
-    resume_command=bool(argv) and argv[0]=='resume'
+    resume_command=bool(argv) and argv[0]=='resume' and (
+        is_codex_launch(argv) if provider=='codex' else is_claude_launch(argv))
     from .sessions import claude_resume_request, shared_claude_arguments
     native_resume, native_session, native_extra = claude_resume_request(argv) if provider=='claude' else (False,None,argv)
     interactive = sys.stdin.isatty() and sys.stdout.isatty() and not any(a in ('-p','--print') for a in argv)
@@ -38,13 +40,10 @@ def provider_main(provider, argv=None):
     try:
         if not managed:
             path = executable(provider)
-            admin = {'login','logout','app-server','mcp','mcp-server','completion','features',
-                     'debug','help','update','upgrade','install','doctor','auth','plugin','plugins'}
-            launch = is_claude_launch(argv) if provider=='claude' else (
-                not any(arg in ('--version','-V','--help','-h') for arg in argv)
-                and (not argv or argv[0] not in admin))
-            manager=Manager() if os.environ.get('ACCOUNT','').strip() and launch else None
-            account=account_override(manager,provider) if manager else None
+            launch = is_claude_launch(argv) if provider=='claude' else is_codex_launch(argv)
+            override = bool(os.environ.get('ACCOUNT','').strip()) and launch
+            manager=Manager() if launch and (provider=='codex' or override) else None
+            account=account_override(manager,provider) if override else None
             if account:
                 from .registry import sync_identity, fixed_model_arguments
                 if not manager.has_auth(account):
@@ -57,7 +56,8 @@ def provider_main(provider, argv=None):
                     options=['--no-daemon']
                     if account.get('shared_sqlite_home'):
                         options+=['-c','sqlite_home='+json.dumps(account['shared_sqlite_home'])]
-                    os.execve(path,[path,*options,*fixed_model_arguments(account,argv),*argv],env)
+                    arguments=codex_arguments(manager,[*options,*fixed_model_arguments(account,argv),*argv])
+                    os.execve(path,[path,*arguments],env)
                 else:
                     from .claude_setup import repair_onboarding
                     repair_onboarding(manager,account)
@@ -72,6 +72,8 @@ def provider_main(provider, argv=None):
                 env['CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN']='1'
                 if native_resume and native_session:argv=shared_claude_arguments(Manager(),argv)
                 os.execve(path, [path, *claude_arguments(argv)], env)
+            elif provider=='codex' and launch:
+                os.execv(path, [path, *codex_arguments(manager,argv)])
             else:
                 os.execv(path, [path, *argv])
         else:

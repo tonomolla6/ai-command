@@ -2,6 +2,72 @@
 from .core import Manager
 
 
+CODEX_DANGER_FLAG = '--dangerously-bypass-approvals-and-sandbox'
+CODEX_ADMIN = {'agents', 'login', 'logout', 'app-server', 'remote-control', 'mcp',
+               'mcp-server', 'completion', 'features', 'debug', 'help', 'update',
+               'upgrade', 'install', 'doctor', 'auth', 'plugin', 'plugins',
+               'sandbox', 'apply', 'a', 'queue', 'archive', 'delete', 'unarchive',
+               'migrate-rollouts', 'execpolicy', 'exec-server', 'cloud', 'proto',
+               'responses-api-proxy', 'stdio-to-uds'}
+CODEX_VALUES = {'-c', '--config', '-m', '--model', '-p', '--profile', '-C', '--cd',
+                '-i', '--image', '--add-dir', '--local-provider', '--enable',
+                '--disable', '--output-schema', '-o', '--output-last-message',
+                '--color', '--remote', '--remote-auth-token-env', '--thread-source',
+                '--cyber-access-program', '--base', '--commit', '--title',
+                '--environment-id', '--name', '-s', '--sandbox', '-a', '--ask-for-approval'}
+
+
+def is_codex_launch(arguments):
+    """Classify native launches without interpreting option values as commands."""
+    first = None
+    i = 0
+    args = list(arguments)
+    while i < len(args):
+        arg = args[i]
+        if arg == '--':
+            break
+        if arg in ('--help', '-h', '--version', '-V'):
+            return False
+        if arg in CODEX_VALUES:
+            i += 2
+            continue
+        if not arg.startswith('-') and first is None:
+            first = arg
+        i += 1
+    return first not in CODEX_ADMIN
+
+
+def codex_arguments(manager, arguments):
+    """Use Codex's official full-access switch for explicitly enabled launches."""
+    args = list(arguments)
+    if not manager.config.get('codex_skip_permissions', False) or not is_codex_launch(args):
+        return args
+    result = []
+    i = 0
+    conflicting_values = {'-s', '--sandbox', '-a', '--ask-for-approval'}
+    conflicting_flags = {CODEX_DANGER_FLAG, '--yolo', '--full-auto', '--approve-for-me'}
+    while i < len(args):
+        arg = args[i]
+        if arg == '--':
+            result.extend(args[i:])
+            break
+        if arg in conflicting_values:
+            i += 2
+            continue
+        if (arg.split('=', 1)[0] in conflicting_flags or
+                arg.startswith(('--sandbox=', '--ask-for-approval=')) or
+                (len(arg) > 2 and arg[:2] in ('-s', '-a') and not arg.startswith('--'))):
+            i += 1
+            continue
+        if arg in CODEX_VALUES:
+            result.extend(args[i:i + 2])
+            i += 2
+            continue
+        result.append(arg)
+        i += 1
+    return [CODEX_DANGER_FLAG, *result]
+
+
 def claude_danger_enabled(manager=None):
     manager = manager or Manager()
     return manager.config.get('claude_skip_permissions', bool(manager.config and not manager.config.get('manager_schema')))
@@ -66,6 +132,9 @@ def single_tool_arguments(manager, provider, arguments):
         if arg in TOOL_VALUES:
             options.extend(args[i:i + 2])
             i += 2
+            continue
+        if provider == 'agy' and (arg == '--sandbox' or arg.startswith('--sandbox=')):
+            i += 1
             continue
         if arg == flag or arg.startswith(flag + '=') or (provider == 'opencode' and arg == '--no-auto'):
             i += 1
