@@ -12,34 +12,51 @@ def install_extensions(manager):
     target=manager.home/'.vscode-server/extensions'
     target.mkdir(parents=True,exist_ok=True)
     registry=target/'extensions.json'
+    obsolete=target/'.obsolete'
     machine=manager.home/'.vscode-server/data/Machine/settings.json'
     try:
         entries=json.loads(registry.read_text()) if registry.exists() else []
         settings=json.loads(machine.read_text()) if machine.exists() else {}
+        retired=json.loads(obsolete.read_text()) if obsolete.exists() else {}
     except ValueError:
         raise ManagerError('VS Code usa JSONC/JSON no estándar; se conserva, instala las extensiones manualmente') from None
-    if not isinstance(entries,list) or not isinstance(settings,dict):
+    if not isinstance(entries,list) or not isinstance(settings,dict) or not isinstance(retired,dict):
         raise ManagerError('Registro VS Code desconocido; se conserva')
-    backup_files(manager.home,[registry,machine],'Install requested AI Command VS Code extensions')
+    backup_files(manager.home,[registry,machine,obsolete],'Install requested AI Command VS Code extensions')
+    installed=[]
     for name in ('agentes-terminales','terminales-persistentes'):
         folder=source/name
         package=read_json(folder/'package.json')
         ident=package['publisher']+'.'+package['name']
         relative=ident+'-'+package['version']
+        timestamp=next((e.get('metadata',{}).get('installedTimestamp') for e in entries
+                        if e.get('identifier',{}).get('id')==ident and e.get('version')==package['version']),None)
         dest=target/relative
         if not dest.exists():
             shutil.copytree(folder,dest)
         elif any(not (dest/p.relative_to(folder)).is_file() or (dest/p.relative_to(folder)).read_bytes()!=p.read_bytes()
                  for p in folder.rglob('*') if p.is_file()):
             raise ManagerError('Extensión de la misma versión con cambios locales conservada: '+relative)
-        entries=[e for e in entries if e.get('identifier',{}).get('id')!=ident]
+        remaining=[]
+        for entry in entries:
+            previous=entry.get('identifier',{}).get('id','')
+            if previous.rsplit('.',1)[-1]!=package['name']:
+                remaining.append(entry);continue
+            old=entry.get('relativeLocation')
+            if (isinstance(old,str) and Path(old).name==old and old!=relative and
+                    old==previous+'-'+entry.get('version','')):
+                retired[old]=True
+        entries=remaining
+        retired.pop(relative,None)
         entries.append({'identifier':{'id':ident},'version':package['version'],
             'location':{'$mid':1,'path':str(dest),'scheme':'file'},'relativeLocation':relative,
             'metadata':{'isApplicationScoped':False,'isMachineScoped':True,'isBuiltin':False,
-                        'installedTimestamp':int(time.time()*1000),'pinned':True,'source':'vsix'}})
+                        'installedTimestamp':timestamp or int(time.time()*1000),'pinned':True,'source':'vsix'}})
+        installed.append(package['displayName']+' '+package['version'])
     machine.parent.mkdir(parents=True,exist_ok=True)
     settings['terminal.integrated.defaultProfile.linux']='AI Command tmux persistente'
     atomic_write(registry,json.dumps(entries,indent=2)+'\n',0o644)
+    atomic_write(obsolete,json.dumps(retired,indent=2)+'\n',0o644)
     atomic_write(machine,json.dumps(settings,indent=2)+'\n',0o600)
-    print('AI Command Agentes 0.1.9 y AI Command Terminales 0.4.3 instalados para este usuario.')
+    print(' y '.join(installed)+' instalados para este usuario.')
     print('Recarga la ventana de VS Code Remote SSH para activarlos; tmux debe estar instalado.')
