@@ -5,12 +5,45 @@ import contextlib
 import hashlib
 import json
 import os
+import re
 from pathlib import Path
 import sqlite3
 import subprocess
 
 from .core import ManagerError, backup_files, private_dir, safe_file
 from .history_imports import imported_sessions, mapped_directory, imported_resume
+
+
+def claude_resume_request(arguments):
+    """Recognize native UUID resumes without treating prompts/searches as flags."""
+    args = list(arguments)
+    for index, arg in enumerate(args):
+        if arg == '--':
+            break
+        if index and args[index - 1] in ('-p', '--print', '--model', '--system-prompt',
+                '--append-system-prompt', '--settings', '--mcp-config', '--agent', '--session-id'):
+            continue
+        if arg in ('--continue', '-c'):
+            return True, None, args[:index] + args[index + 1:]
+        value = None
+        count = 1
+        if arg in ('--resume', '-r') and index + 1 < len(args):
+            value = args[index + 1]
+            count = 2
+        elif arg.startswith('--resume='):
+            value = arg.partition('=')[2]
+        if value and re.fullmatch(r'[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}', value):
+            return True, value.lower(), args[:index] + args[index + count:]
+    return False, None, args
+
+
+def shared_claude_arguments(manager, arguments):
+    """Native noninteractive calls can also read the original account's transcript."""
+    requested, ident, extras = claude_resume_request(arguments)
+    if not requested or not ident:
+        return list(arguments)
+    session = next((s for s in list_sessions(manager, 'claude', None) if s['id'] == ident), None)
+    return ['--resume', session['path'], *extras] if session else list(arguments)
 
 
 def same_directory(left, right):

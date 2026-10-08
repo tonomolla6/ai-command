@@ -285,10 +285,42 @@ class AutomaticTests(unittest.TestCase):
             self.assertEqual(run.call_count,1)
             self.assertIn('--dangerously-skip-permissions',run.call_args.args[0])
             self.assertEqual(run.call_args.kwargs['env']['IS_SANDBOX'],'1')
+            self.assertEqual(run.call_args.kwargs['env']['CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN'],'1')
             self.assertEqual('--resume' in run.call_args.args[0],session is not None)
+
+    def test_numbered_claude_native_resume_reads_another_accounts_transcript(self):
+        from ai_manager.cli import launch
+        ident='11111111-2222-3333-4444-555555555555'
+        session={'id':ident,'path':str(self.home/'other-profile/transcript.jsonl')}
+        args=argparse.Namespace(provider='claude',account='2',dry_run=True,extra=['--resume',ident])
+        output=io.StringIO()
+        with patch('ai_manager.cli.list_sessions',return_value=[session]), \
+             patch('ai_manager.cli.handoff_prompt',return_value=None), \
+             patch('ai_manager.cli.executable',return_value='/original/claude'),contextlib.redirect_stdout(output):
+            launch(self.manager,args)
+        plan=json.loads(output.getvalue())
+        self.assertEqual(plan['home'],self.manager.account('claude','2')['home'])
+        self.assertEqual(plan['session_id'],ident)
+        self.assertIn(session['path'],plan['command'])
+        self.assertNotIn(ident,plan['command'])
+        self.assertIn('bypassPermissions',plan['command'])
 
 
 class EntrypointTests(unittest.TestCase):
+    def test_native_claude_uuid_resume_uses_shared_manager_with_remaining_options(self):
+        ident='11111111-2222-3333-4444-555555555555'
+        with patch('ai_manager.entrypoints.sys.stdin.isatty',return_value=True), \
+             patch('ai_manager.entrypoints.sys.stdout.isatty',return_value=True), \
+             patch('ai_manager.cli.main',return_value=0) as main:
+            for flag in ('--resume','-r'):
+                provider_main('claude',[flag,ident,'--model','example'])
+                main.assert_called_with(['auto','claude','--resume','--session',ident,'--','--model','example'])
+
+    def test_resume_parser_never_reads_prompts_as_resume_flags(self):
+        from ai_manager.sessions import claude_resume_request
+        for args in (['--','--continue'],['-p','--continue'],['--append-system-prompt','--continue']):
+            self.assertEqual(claude_resume_request(args),(False,None,args))
+
     def test_resume_code_is_explicit_and_bare_commands_have_no_resume(self):
         with patch.dict(os.environ, {'AI_MANAGER_BOUND_PROVIDER': ''}), \
              patch('ai_manager.entrypoints.sys.stdin.isatty', return_value=True), \

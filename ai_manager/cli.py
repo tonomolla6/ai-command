@@ -133,6 +133,14 @@ def selected_session(manager,provider,cwd,pick=False):
 
 
 def launch(manager,args,resume=False,session=None):
+    extras=list(getattr(args,"extra",[]) or [])
+    if extras[:1]==["--"]:extras=extras[1:]
+    if args.provider=='claude':
+        from .sessions import claude_resume_request
+        requested,ident,remaining=claude_resume_request(extras)
+        if requested:
+            resume=True;extras=remaining
+            if ident:args.session=ident
     account=manager.account(args.provider,args.account)
     if not manager.has_auth(account) and not getattr(args,'dry_run',False):
         raise ManagerError(f"{account['label']} necesita login: ai login {args.provider} {args.account}")
@@ -150,12 +158,10 @@ def launch(manager,args,resume=False,session=None):
     prompt=handoff_prompt(manager,cwd)
     command=[executable(args.provider)]
     if args.provider=="codex":
-        command.append("--no-daemon")
+        command.extend(["--no-daemon","--no-alt-screen"])
         if account.get("shared_sqlite_home"):
             command.extend(["-c","sqlite_home="+json.dumps(account['shared_sqlite_home'])])
     if session:command.extend(prepare_resume(manager,account,session,dry_run=getattr(args,'dry_run',False)))
-    extras=list(getattr(args,"extra",[]) or [])
-    if extras[:1]==["--"]:extras=extras[1:]
     command.extend(fixed_model_arguments(account,extras))
     if prompt:
         # Recorded Claude system prompts can ignore --append-system-prompt on
@@ -181,6 +187,7 @@ def launch(manager,args,resume=False,session=None):
               f" · {cwd}"+(f" · resume {session['id']}" if session else ""),flush=True)
         # Same foreground process group/terminal so Ctrl+C/Ctrl+D retain CLI semantics.
         env=manager.env(account);env.pop('ACCOUNT',None);env['AI_MANAGER_BOUND_PROVIDER']=account['provider']
+        if args.provider=='claude':env['CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN']='1'
         if danger:env['IS_SANDBOX']='1'
         try:result=subprocess.run(command,env=env,cwd=cwd)
         except KeyboardInterrupt:return 130

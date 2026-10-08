@@ -27,8 +27,11 @@ def provider_main(provider, argv=None):
     argv = list(sys.argv[1:] if argv is None else argv)
     managed_flags = {'--ai-new': '--new', '--ai-dry-run': '--dry-run'}
     resume_command=bool(argv) and argv[0]=='resume'
+    from .sessions import claude_resume_request, shared_claude_arguments
+    native_resume, native_session, native_extra = claude_resume_request(argv) if provider=='claude' else (False,None,argv)
+    interactive = sys.stdin.isatty() and sys.stdout.isatty() and not any(a in ('-p','--print') for a in argv)
     managed = (not argv and sys.stdin.isatty() and sys.stdout.isatty()) or (
-        bool(argv) and argv[0] in managed_flags) or resume_command
+        bool(argv) and argv[0] in managed_flags) or resume_command or (native_resume and interactive)
     # An interactive child from an already bound account keeps its identity.
     if os.environ.get('AI_MANAGER_BOUND_PROVIDER') == provider and not argv:
         managed = False
@@ -58,12 +61,16 @@ def provider_main(provider, argv=None):
                 else:
                     from .claude_setup import repair_onboarding
                     repair_onboarding(manager,account)
+                    argv=shared_claude_arguments(manager,argv)
+                    env['CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN']='1'
                     if claude_danger_enabled(manager):
                         env['IS_SANDBOX']='1';argv=claude_arguments(argv)
                     os.execve(path,[path,*argv],env)
                 return 0
             if provider == 'claude' and is_claude_launch(argv) and claude_danger_enabled():
                 env = dict(os.environ);env['IS_SANDBOX'] = '1'
+                env['CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN']='1'
+                if native_resume and native_session:argv=shared_claude_arguments(Manager(),argv)
                 os.execve(path, [path, *claude_arguments(argv)], env)
             else:
                 os.execv(path, [path, *argv])
@@ -73,6 +80,9 @@ def provider_main(provider, argv=None):
                 argv.pop(0);options.append('--resume')
                 if argv and not argv[0].startswith('-'):
                     options.extend(['--session',argv.pop(0)])
+            elif native_resume and interactive:
+                argv=native_extra;options.append('--resume')
+                if native_session:options.extend(['--session',native_session])
             while argv and argv[0] in managed_flags:
                 options.append(managed_flags[argv.pop(0)])
             from .cli import main
