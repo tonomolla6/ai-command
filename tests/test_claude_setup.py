@@ -92,6 +92,21 @@ class AuthenticatedOnboardingTests(unittest.TestCase):
 
 
 class OfficialUsageTests(unittest.TestCase):
+    def test_installed_local_usage_capability_survives_a_cli_version_change(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            m=Manager(tmp);m.state.mkdir(parents=True)
+            binary=Path(tmp)/'claude'
+            binary.write_bytes(b'ELF fixture\0{type:"local",name:"usage",aliases:["cost"],supportsNonInteractive:!0,load:()=>import("usage.js")}')
+            account={'provider':'claude','home':str(Path(tmp)/'profile')}
+            finish={'type':'result','subtype':'success','num_turns':0,'total_cost_usd':0}
+            stream=json.dumps({'type':'assistant','usage_report':self.report()})+'\n'+json.dumps(finish)
+            with patch('ai_manager.providers.version',return_value='2.1.293'), \
+                 patch('ai_manager.providers.executable',return_value=str(binary)), \
+                 patch('ai_manager.providers.subprocess.run') as run, \
+                 patch('ai_manager.providers.claude_usage_pty',side_effect=AssertionError('trust dialog fallback')):
+                run.return_value.returncode=0;run.return_value.stdout=stream
+                self.assertEqual(claude_usage(m,account,details=True)['windows'][1]['available_percent'],0)
+
     def report(self):
         return {'rate_limits':{'limits':[
             {'kind':'session','percent':0,'resets_at':None,'is_active':False},

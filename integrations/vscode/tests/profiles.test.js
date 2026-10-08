@@ -6,6 +6,21 @@ const os=require('node:os');
 const path=require('node:path');
 const {processPaths}=require('../agentes-terminales/process-paths');
 const {readClaude}=require('../agentes-terminales/claude');
+const {findAgents}=require('../agentes-terminales/monitor');
+
+test('a renamed Python account launcher is traversed to the native agent',async()=>{
+ const root=await fs.mkdtemp(path.join(os.tmpdir(),'ai-process-'));
+ try{
+  const python=path.join(root,'python3');await fs.writeFile(python,'\x7fELFpython');
+  const codex=path.join(root,'codex');await fs.writeFile(codex,'\x7fELFnative');
+  for(const [pid,exe,children] of [[10,python,'11'],[11,codex,'12']]){
+   const dir=path.join(root,String(pid));await fs.mkdir(path.join(dir,'task',String(pid)),{recursive:true});
+   await fs.writeFile(path.join(dir,'comm'),'codex\n');await fs.symlink(exe,path.join(dir,'exe'));
+   await fs.writeFile(path.join(dir,'task',String(pid),'children'),children);
+  }
+  assert.deepEqual(await findAgents(10,0,root),[{pid:11,engine:'codex'}]);
+ }finally{await fs.rm(root,{recursive:true});}
+});
 
 test('process paths return only the selected account directories',async()=>{
  const root=await fs.mkdtemp(path.join(os.tmpdir(),'ai-plugin-'));
