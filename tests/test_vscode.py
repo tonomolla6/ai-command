@@ -10,6 +10,26 @@ from ai_manager.vscode import install_extensions
 
 
 class VSCodeInstallTests(unittest.TestCase):
+    def test_installed_extension_owns_its_terminal_helpers_and_preserves_path_command(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            manager=Manager(tmp)
+            unrelated=manager.home/'.local/bin/terminales'
+            unrelated.parent.mkdir(parents=True)
+            unrelated.write_text('third-party terminal launcher\n')
+            with contextlib.redirect_stdout(io.StringIO()):install_extensions(manager)
+            root=manager.home/'.vscode-server/extensions'
+            entry=next(e for e in json.loads((root/'extensions.json').read_text())
+                       if e['identifier']['id']=='ai-command.terminales-persistentes')
+            folder=root/entry['relativeLocation']
+            source=Path(__file__).resolve().parent.parent/'integrations/vscode/bin'
+            for name in ('terminales','terminales-native'):
+                helper=folder/'bin'/name
+                self.assertTrue(helper.is_file(), 'missing bundled helper: '+name)
+                self.assertEqual(helper.read_bytes(),(source/name).read_bytes())
+                self.assertEqual(helper.stat().st_mode & 0o777,0o755)
+            self.assertEqual(unrelated.read_text(),'third-party terminal launcher\n')
+            with contextlib.redirect_stdout(io.StringIO()):install_extensions(manager)
+
     def test_update_replaces_legacy_registration_and_preserves_old_extension_files(self):
         with tempfile.TemporaryDirectory() as tmp:
             manager=Manager(tmp)
