@@ -180,7 +180,9 @@ class Manager:
         data = read_json(self.credential(account))
         if account["provider"] == "codex":
             return bool(data.get("tokens") or data.get("OPENAI_API_KEY"))
-        return bool(data.get("claudeAiOauth") or data.get("anthropicApiKey"))
+        oauth=data.get('claudeAiOauth')
+        return bool((isinstance(oauth,dict) and (oauth.get('accessToken') or oauth.get('refreshToken')))
+                    or data.get('anthropicApiKey'))
 
     def env(self, account):
         env = dict(os.environ)

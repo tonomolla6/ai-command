@@ -4,6 +4,7 @@ from __future__ import annotations
 import codecs
 import datetime as dt
 import fcntl
+from functools import lru_cache
 import json
 import math
 import os
@@ -375,12 +376,40 @@ def parse_claude_report(report):
     return {'windows':windows,'credits':credits,'source':'claude --print /usage (stream-json, 0 turns)'} if windows else None
 
 
+@lru_cache(maxsize=8)
+def _claude_usage_capability(path,size,modified):
+    """Inspect installed code only; unknown command registrations stay on PTY.
+
+    Native Claude bundles its local command table. Require /usage, local type
+    and explicit noninteractive support in the same bounded registration.
+    The file identity cache expires whenever the installed code is replaced.
+    """
+    registration=re.compile(
+        rb'\{(?=[^{}]{0,2048}\btype\s*:\s*[\x22\x27]local[\x22\x27])'
+        rb'(?=[^{}]{0,2048}\bname\s*:\s*[\x22\x27]usage[\x22\x27])'
+        rb'(?=[^{}]{0,2048}\bsupportsNonInteractive\s*:\s*(?:!0\b|true\b))')
+    tail=b''
+    with Path(path).open('rb') as stream:
+        while chunk:=stream.read(1024**2):
+            data=tail+chunk
+            if registration.search(data):return True
+            tail=data[-4096:]
+    return False
+
+
+def claude_supports_usage(binary):
+    try:
+        path=Path(binary).resolve();stat=path.stat()
+        return _claude_usage_capability(str(path),stat.st_size,stat.st_mtime_ns)
+    except OSError:
+        return False
+
+
 def claude_usage(manager, account, timeout=25, details=False):
-    # This installed release registers /usage as supportsNonInteractive. Do not
-    # guess that an unknown release handles slash commands without inference.
-    if not re.search(r'\b2\.1\.284\b',version('claude')):
+    binary=executable('claude')
+    if not (re.search(r'\b2\.1\.284\b',version('claude')) or claude_supports_usage(binary)):
         return claude_usage_pty(manager,account,timeout,details)
-    command=[executable('claude'),'--safe-mode','--strict-mcp-config','--mcp-config',
+    command=[binary,'--safe-mode','--strict-mcp-config','--mcp-config',
              '{"mcpServers":{}}','--tools','','--permission-mode','plan',
              '--no-session-persistence','--print','--verbose','--output-format','stream-json','/usage']
     result=subprocess.run(command,stdin=subprocess.DEVNULL,capture_output=True,text=True,
@@ -483,7 +512,7 @@ def query_limits(manager, account):
              "email":account.get('email'),"email_verified":False,
              "queried_at": now(), "available_percent": None, "windows": [], "credits":None,"status": "UNKNOWN"}
     if not manager.has_auth(account):
-        entry["reason"] = "SIN LOGIN"
+        entry.update(status='SIN LOGIN',reason='SIN LOGIN · ejecuta ai login '+account['provider']+' '+account['account'])
         return entry
     try:
         with manager.lock("probe-"+manager.key(account).replace(":","-"), timeout=15):
@@ -507,6 +536,7 @@ def query_limits(manager, account):
                                       text=True,timeout=12,env=manager.env(account),cwd=manager.state)
                 actual=json.loads(result.stdout);observed=actual.get('email')
                 if result.returncode or actual.get('loggedIn') is not True:
+                    entry['status']='SIN LOGIN'
                     raise ManagerError('Claude no confirma el login; revisa ai login claude '+account['account'])
                 if account.get('email') and observed and account['email'].lower()!=observed.lower():
                     raise ManagerError('El correo del login no coincide con la cuenta registrada')
