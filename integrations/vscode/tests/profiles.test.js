@@ -75,3 +75,14 @@ test('Claude state follows CLAUDE_CONFIG_DIR and validates process identity',asy
   assert.deepEqual(await readClaude(44,options),{status:'unknown'});
  }finally{await fs.rm(root,{recursive:true});}
 });
+
+
+test('native revived tabs with no creation arguments use real PID bindings',async()=>{
+ const {AgentsView}=require('../agentes-terminales/view');
+ const revived={name:'Working agent',creationOptions:{name:'Working agent'},processId:Promise.resolve(42)};
+ const hidden={name:'Layout helper',creationOptions:{hideFromUser:true},processId:Promise.resolve(43)};
+ const vscode={window:{terminals:[revived,hidden]},workspace:{workspaceFolders:[{uri:{fsPath:'/home/test/project'}}]},EventEmitter:class{constructor(){this.event=()=>{};}fire(){}}};
+ const monitor={sample:async(keys,bindings)=>new Map([...keys].filter(k=>bindings.get(k)===42).map(k=>[k,{workspace:'/home/test/project',status:'working',engine:'codex'}]))};
+ const view=new AgentsView(vscode,monitor);await view.refresh();
+ assert.equal(view.rows.length,1);assert.equal(view.rows[0].name,revived.name);assert.equal(view.rows[0].engine,'codex');
+});

@@ -5,8 +5,7 @@ const LABELS={working:'Trabajando',done:'Terminado',attention:'Necesita atenció
 const terminalKeys=new WeakMap();
 let nextTerminal=0;
 const keyOf=t=>{
-  const arg=t.creationOptions?.shellArgs?.[0];
-  if(typeof arg!=='string'||!/^vsc-(?:tab|resume)-[a-f0-9]{32}$|^vscode-[a-f0-9]{32}$/.test(arg))return;
+  if(t.creationOptions?.hideFromUser||t.creationOptions?.pty)return;
   // Native Split clones shellArgs: a tab's UI identity belongs to the Terminal
   // object, while its tmux identity is obtained from the actual client PID.
   if(!terminalKeys.has(t))terminalKeys.set(t,'terminal-'+(++nextTerminal));
@@ -56,7 +55,11 @@ class AgentsView {
       }
       const bindings=new Map(await Promise.all([...allTerminals].map(async([key,t])=>[key,await Promise.race([t.processId,new Promise(r=>setTimeout(r,500))])])));
       const allStates=allTerminals.size?await this.monitor.sample(new Set(allTerminals.keys()),bindings):new Map();
-      const terminals=new Map([...allTerminals].filter(([key,t])=>belongsToWorkspace(t,this.vscode,allStates.get(key))));
+      const terminals=new Map([...allTerminals].filter(([key,t])=>{
+        const arg=t.creationOptions?.shellArgs?.[0];
+        const managed=typeof arg==='string'&&/^vsc-(?:tab|resume)-[a-f0-9]{32}$|^vscode-[a-f0-9]{32}$/.test(arg);
+        return (allStates.has(key)||managed)&&belongsToWorkspace(t,this.vscode,allStates.get(key));
+      }));
       this.terminals=terminals;
       const states=new Map([...allStates].filter(([key])=>terminals.has(key)));
       const currentGroups=await this.layout?.sample(terminals);
