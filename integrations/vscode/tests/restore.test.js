@@ -25,6 +25,19 @@ test('restored tabs use an absolute bundled launcher and retain their session ke
  assert.equal(path.basename(options.shellPath),'terminales');
  assert.equal(options.shellArgs[0],'vsc-tab-'+session.key);
  assert.equal(options.env.AI_COMMAND_TERMINALES_NATIVE,'1');
+ assert.equal(options.isTransient,true,'tmux owns restoration; VS Code must not revive this client independently');
+});
+
+test('recovery explicitly requires an existing session instead of creating a blank one',async()=>{
+ const {controller,session,created}=fixture();
+ await controller.restore();
+ assert.equal(created[0].creationOptions.shellArgs[0],'vsc-resume-'+session.key);
+});
+
+test('startup restores clients without relaunching live terminals',async()=>{
+ const {controller}=fixture();let migrations=0;
+ controller.migrate=async()=>{migrations++;};
+ await controller.start();assert.equal(migrations,0);
 });
 
 test('VS Code revived clients are adopted without creating additional tabs',async()=>{

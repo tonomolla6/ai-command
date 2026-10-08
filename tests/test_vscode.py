@@ -10,6 +10,18 @@ from ai_manager.vscode import install_extensions
 
 
 class VSCodeInstallTests(unittest.TestCase):
+    def test_install_disables_competing_native_revival_without_changing_other_preferences(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            manager=Manager(tmp)
+            settings=manager.home/'.vscode-server/data/Machine/settings.json'
+            settings.parent.mkdir(parents=True)
+            settings.write_text(json.dumps({'terminal.integrated.enablePersistentSessions':True,
+                                           'editor.fontSize':19}))
+            with contextlib.redirect_stdout(io.StringIO()):install_extensions(manager)
+            result=json.loads(settings.read_text())
+            self.assertFalse(result['terminal.integrated.enablePersistentSessions'])
+            self.assertEqual(result['editor.fontSize'],19)
+
     def test_installed_extension_owns_its_terminal_helpers_and_preserves_path_command(self):
         with tempfile.TemporaryDirectory() as tmp:
             manager=Manager(tmp)
