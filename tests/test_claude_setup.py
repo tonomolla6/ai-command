@@ -11,7 +11,7 @@ from unittest.mock import patch
 from ai_manager.claude_setup import repair_onboarding
 from ai_manager.cli import login
 from ai_manager.core import Manager, ManagerError, read_json, write_json
-from ai_manager.providers import claude_usage, parse_claude_report, parse_claude
+from ai_manager.providers import claude_usage, claude_supports_usage, parse_claude_report, parse_claude, query_limits
 
 
 class AuthenticatedOnboardingTests(unittest.TestCase):
@@ -92,6 +92,29 @@ class AuthenticatedOnboardingTests(unittest.TestCase):
 
 
 class OfficialUsageTests(unittest.TestCase):
+    def test_capability_scan_rejects_prompt_commands_and_invalidates_after_replacement(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            binary=Path(tmp)/'claude'
+            for registration in [b'{type:"prompt",name:"usage",supportsNonInteractive:!0}',
+                                 b'{type:"local",name:"other",supportsNonInteractive:!0}',
+                                 b'{type:"local",name:"usage",supportsNonInteractive:!1}']:
+                binary.write_bytes(registration)
+                self.assertFalse(claude_supports_usage(binary))
+            binary.write_bytes(b'x'*(1024**2-10)+b'{type:"local",name:"usage",supportsNonInteractive:!0}')
+            self.assertTrue(claude_supports_usage(binary))
+            binary.write_bytes(b'new unsupported build')
+            self.assertFalse(claude_supports_usage(binary))
+
+    def test_native_logout_is_reported_as_missing_login_without_using_the_empty_profile(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            m=Manager(tmp);home=Path(tmp)/'profile';home.mkdir()
+            account={'provider':'claude','account':'2','home':str(home)}
+            (home/'.credentials.json').write_text(json.dumps({'claudeAiOauth':{'expiresAt':0,'accessToken':None,'refreshToken':None}}))
+            with patch('ai_manager.providers.subprocess.run') as run:
+                row=query_limits(m,account)
+                self.assertEqual(row['status'],'SIN LOGIN');run.assert_not_called()
+                self.assertIn('ai login claude 2',row['reason'])
+
     def test_installed_local_usage_capability_survives_a_cli_version_change(self):
         with tempfile.TemporaryDirectory() as tmp:
             m=Manager(tmp);m.state.mkdir(parents=True)
