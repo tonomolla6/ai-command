@@ -69,6 +69,11 @@ agente puede ejecutar `terminal-estado atencion` en su terminal; la marca dura
 hasta el siguiente turno. No se adivina una consulta por contener interrogantes.
 El adaptador debe revisarse si cambia el formato de Codex.
 
+En 0.1.10 se sigue la cadena de lanzadores Python hasta el ejecutable nativo:
+el nombre del proceso `ai` o `codex` por sí solo no identifica al agente.
+Se usa el `tmux` de PATH, igual que los lanzadores de las terminales, para
+consultar el servidor correcto cuando conviven instalaciones distintas.
+
 La lectura de historial inicial está limitada a 8 MiB por agente; posteriormente
 solo se leen bytes nuevos. Si faltan eventos o la asociación no es inequívoca,
 se muestra gris. No se guardan ni se muestran mensajes del chat en esta extensión.

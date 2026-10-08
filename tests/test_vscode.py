@@ -30,4 +30,3 @@ class VSCodeInstallTests(unittest.TestCase):
             self.assertEqual((old_dir/'private-change.txt').read_text(),'preserved')
             with contextlib.redirect_stdout(io.StringIO()):install_extensions(manager)
             self.assertEqual(json.loads(registry.read_text()),entries)
-

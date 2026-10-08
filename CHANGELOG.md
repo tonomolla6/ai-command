@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Consulta Claude `/usage` sin interacción cuando el ejecutable instalado declara soporte local, incluso después de una actualización; conserva PTY para formatos desconocidos y exige cero turnos y coste.
+- Los perfiles OAuth vacíos aparecen como `SIN LOGIN`, con el comando de login correspondiente.
+- VS Code identifica el proceso nativo detrás de los lanzadores `ai`/Python y usa el tmux de PATH. Las extensiones anteriores se retiran del registro con backup, conservando sus archivos.
 - El mantenimiento nativo de Codex instala también `codex-code-mode-host` de la misma release y arquitectura, con checksums oficiales y validación previa de ambos ejecutables.
 - Los backups y la recuperación incluyen el auxiliar; un fallo al sustituir el CLI restaura la pareja anterior. El mantenimiento se aplaza si cualquiera de los dos procesos está activo.
 
