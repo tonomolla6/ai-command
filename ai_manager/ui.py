@@ -119,7 +119,8 @@ def usage_card(account,row,width,reset,age):
     title=(prefix if account.get('single') else prefix+account['account'])+' · '+account['label']
     result=[colored('┌─ '+fit(title,width-5)+' ┐',provider)]
     email=row.get('email') or account.get('email') or ('Cuenta actual · correo no publicado' if account.get('single') else 'correo pendiente')
-    verified=row.get('email_verified',False) or account.get('email_verified',False)
+    # A fresh failed identity check overrides an older registration check.
+    verified=row.get('email_verified',account.get('email_verified',False))
     body=[colored(email,'bold')+colored(' ✓' if verified else ' ○','ok' if verified else 'muted'),colored(state,style)]
     if account.get('priority')=='low':body.append(colored('↓ Prioridad baja · última opción automática','low'))
     if blocked:

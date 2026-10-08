@@ -8,6 +8,15 @@ from ai_manager.ui import render_usage, visible_width, fit, usage_card, blocked_
 
 
 class UsageLayoutTests(unittest.TestCase):
+    def test_missing_login_does_not_show_an_old_verified_identity_as_current(self):
+        account={'provider':'claude','account':'2','label':'Claude 2',
+                 'email':'test@example.invalid','email_verified':True}
+        row={'status':'SIN LOGIN','email_verified':False,'reason':'SIN LOGIN'}
+        with patch.dict(os.environ,{'AI_MANAGER_COLOR':'never'}):
+            text='\n'.join(usage_card(account,row,64,lambda w:'UNKNOWN',lambda r:0))
+        self.assertIn('test@example.invalid ○',text)
+        self.assertNotIn('✓',text)
+
     def render(self,width,color='never'):
         accounts=[{'provider':p,'account':'4','label':p.title()+' 4','email':p+'4@example.invalid'}
                   for p in ('codex','claude')]
