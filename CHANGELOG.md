@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Una sola restauración de terminales, gestionada por tmux: clientes transitorios, recuperación con clave existente y sin relanzar procesos al arrancar. Las sesiones perdidas se notifican y tmux anterior a 3.7 usa el cliente clásico.
 - La extensión de terminales incluye sus lanzadores y usa una ruta absoluta para conservar la clave al restaurar; evita que otro perfil o un comando antiguo en PATH abra sesiones vacías adicionales.
 - Consulta Claude `/usage` sin interacción cuando el ejecutable instalado declara soporte local, incluso después de una actualización; conserva PTY para formatos desconocidos y exige cero turnos y coste.
 - Los perfiles OAuth vacíos aparecen como `SIN LOGIN`, con el comando de login correspondiente.

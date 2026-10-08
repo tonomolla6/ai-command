@@ -299,6 +299,12 @@ La extensión de terminales incluye su propia pareja de lanzadores y usa una rut
 absoluta: conserva la clave de cada pestaña al recuperar y no depende de otro
 comando `terminales` instalado en PATH. Las pestañas que revive VS Code se adoptan;
 si llegan después de la recuperación, se cierra sólo el cliente adicional.
+La restauración pertenece al gestor: desactiva la recuperación nativa de VS Code
+y sus clientes son transitorios, mientras los procesos permanecen en tmux. Al
+reconectar sólo se adjunta a claves existentes; una sesión desaparecida muestra
+un aviso para usar `ai resume`, sin fabricar otra shell vacía. No relanza clientes
+de trabajo durante el arranque. El renderizado de control usa tmux 3.7 o posterior;
+con versiones anteriores conserva el cliente clásico.
 
 La [skill ai-command](skills/ai-command/SKILL.md) enseña a un agente a dar altas,
 consultar uso y administrar versiones mediante estos comandos. Puedes copiar su
