@@ -15,7 +15,8 @@ import sys
 import time
 
 from .core import Manager, ManagerError, now, public_text, safe_file, read_json, backup_files
-from .automatic import refresh_accounts, select_account, quota_score, quota_expiry, collect_limits, account_override
+from .automatic import (refresh_accounts, select_account, quota_score, quota_expiry,
+                        collect_limits, account_override, QUOTA_CACHE_TTL)
 from .handoff import handoff, handoff_prompt
 from .providers import AUTO_WRAPPER_MARKER, auth_status, executable, version
 from .sessions import list_sessions, prepare_resume, session_lock_name
@@ -213,8 +214,11 @@ def auto_launch(manager,args):
     if explicit:
         row={}
     else:
-        print(colored(f'AI AUTO · consultando cuotas oficiales de {args.provider}…','title'),file=sys.stderr,flush=True)
-        entries=refresh_accounts(manager,args.provider)
+        def progress(cached):
+            message=(f'AI AUTO · {args.provider} · cuotas oficiales en caché (máximo {QUOTA_CACHE_TTL} s)…' if cached else
+                     f'AI AUTO · consultando cuotas oficiales de {args.provider}…')
+            print(colored(message,'title'),file=sys.stderr,flush=True)
+        entries=refresh_accounts(manager,args.provider,force=getattr(args,'refresh',False),notify=progress)
         account=select_account(manager,args.provider,entries)
         row=entries[manager.key(account)]
     expiry=quota_expiry(row)
@@ -397,10 +401,11 @@ def parser():
     install.add_argument('--auto',action='store_true',help='Instalar también codex/claude automáticos en ~/.local/bin')
     install.add_argument('--auto-bin-dir',default=str(Path.home()/'.local/bin'))
     install.add_argument('--shell',action='store_true',help='Preparar agy/opencode directos en Bash conservando los binarios')
-    a=sub.add_parser('auto',help='Elegir cuenta por cuota fresca; resume sólo si se pide')
+    a=sub.add_parser('auto',help='Elegir cuenta por cuota oficial reciente; resume sólo si se pide')
     a.add_argument('provider',choices=['codex','claude'])
     mode=a.add_mutually_exclusive_group();mode.add_argument('--new',action='store_true');mode.add_argument('--resume',action='store_true')
     a.add_argument('--session');a.add_argument('--pick',action='store_true');a.add_argument('--dry-run',action='store_true')
+    a.add_argument('--refresh',action='store_true',help='Consultar cuotas ahora, ignorando la caché de 120 segundos')
     for name in ('status','doctor','switch'):sub.add_parser(name)
     a=sub.add_parser('accounts');a.add_argument('--json',action='store_true');a.add_argument('--all',action='store_true')
     for name in ('limits','usage'):

@@ -9,6 +9,9 @@ from .core import ManagerError
 from .providers import query_limits
 
 
+QUOTA_CACHE_TTL = 120
+
+
 def account_override(manager, provider):
     """Resolve an invocation-only choice without consulting or rotating quotas."""
     value = os.environ.get('ACCOUNT', '').strip()
@@ -80,17 +83,63 @@ def select_account(manager, provider, entries):
     return candidates[0][4]
 
 
-def refresh_accounts(manager, provider):
-    """One fresh official read per authenticated active account; no stale fallback."""
+def quota_cache_current(account, entry, reference):
+    """Reuse bounded official observations, never invent availability at a reset."""
+    if not isinstance(entry, dict):return False
+    if entry.get('provider') != account['provider'] or str(entry.get('account')) != str(account['account']):
+        return False
+    expected = account.get('email')
+    observed = entry.get('email')
+    if not (isinstance(expected, str) and isinstance(observed, str) and expected.lower() == observed.lower()):
+        return False
+    if entry.get('status') not in ('OK', 'UNKNOWN'):
+        # An account that has just logged in must not inherit SIN LOGIN.
+        return False
+    try:
+        queried = dt.datetime.fromisoformat(entry['queried_at'])
+        if queried.tzinfo is None:return False
+        age = (reference - queried).total_seconds()
+        if not 0 <= age < QUOTA_CACHE_TTL:return False
+    except (KeyError, TypeError, ValueError):return False
+    windows = entry.get('windows', [])
+    if not isinstance(windows, list):return False
+    for window in windows:
+        if not isinstance(window, dict):return False
+        try:
+            reset = dt.datetime.fromisoformat(window['reset_at'])
+            if reset.tzinfo is not None and queried < reset <= reference:return False
+        except (KeyError, TypeError, ValueError):pass
+    return True
+
+
+def refresh_accounts(manager, provider, force=False, notify=None):
+    """Reuse recent usage; one process refreshes each provider's automatic pool."""
     accounts = [a for a in manager.accounts(provider) if a.get('automatic') is not False and manager.has_auth(a)]
-    entries = collect_limits(manager, accounts)
-    previous = manager.cache().get('accounts', {})
-    for key, entry in entries.items():
-        if entry['status'] == 'UNKNOWN' and previous.get(key, {}).get('windows'):
-            old = previous[key]
-            entry['previous_success'] = {'queried_at': old.get('queried_at'), 'windows': old['windows']}
-    manager.save_limits(entries)
-    return entries
+
+    def read_cache():
+        previous = manager.cache().get('accounts', {})
+        reference = dt.datetime.now(dt.timezone.utc)
+        pending = [a for a in accounts if force or not quota_cache_current(a, previous.get(manager.key(a)), reference)]
+        return previous, pending
+
+    previous, pending = read_cache()
+    if not pending:
+        if notify:notify(True)
+        return {manager.key(a):previous[manager.key(a)] for a in accounts}
+    # Separate from the account/probe and cache-write locks. Waiters reread the
+    # result written by the first launcher instead of repeating its CLI calls.
+    with manager.lock('auto-quotas-' + provider, timeout=90):
+        previous, pending = read_cache()
+        if notify:notify(not pending)
+        if pending:
+            entries = collect_limits(manager, pending)
+            for key, entry in entries.items():
+                if entry['status'] == 'UNKNOWN' and previous.get(key, {}).get('windows'):
+                    old = previous[key]
+                    entry['previous_success'] = {'queried_at': old.get('queried_at'), 'windows': old['windows']}
+            manager.save_limits(entries)
+            previous.update(entries)
+        return {manager.key(a):previous[manager.key(a)] for a in accounts}
 
 
 def collect_limits(manager, accounts):

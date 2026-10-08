@@ -186,7 +186,7 @@ class AutomaticTests(unittest.TestCase):
         def read(manager, account):
             return quota(account, status='UNKNOWN') if account['account'] == '1' else quota(account, 30, 40)
         with patch('ai_manager.automatic.query_limits', side_effect=read) as query:
-            entries = refresh_accounts(self.manager, 'codex')
+            entries = refresh_accounts(self.manager, 'codex', force=True)
         self.assertEqual({call.args[1]['account'] for call in query.call_args_list}, {'1', '2'})
         self.assertEqual(query.call_count, 2)
         self.assertEqual(select_account(self.manager, 'codex', entries), self.second)
@@ -326,6 +326,15 @@ class AutomaticTests(unittest.TestCase):
 
 
 class EntrypointTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.environment = patch.dict(os.environ, {'HOME': self.temp.name, 'PATH': os.defpath}, clear=True)
+        self.environment.start()
+
+    def tearDown(self):
+        self.environment.stop()
+        self.temp.cleanup()
+
     def test_native_claude_uuid_resume_uses_shared_manager_with_remaining_options(self):
         ident='11111111-2222-3333-4444-555555555555'
         with patch('ai_manager.entrypoints.sys.stdin.isatty',return_value=True), \
