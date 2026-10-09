@@ -70,7 +70,8 @@ def codex_sessions(home, sqlite_home=None):
                     path = Path(path)
                     if path.is_file():
                         found[ident] = {"id": ident, "path": str(path), "cwd": cwd,
-                                        "updated": float(updated or path.stat().st_mtime)}
+                                        "updated": float(updated or path.stat().st_mtime),
+                                        "sqlite_home": str(db.parent)}
             break
         except (sqlite3.Error, OSError, ValueError):
             continue
@@ -124,7 +125,10 @@ def list_sessions(manager, provider, cwd):
             row["origin_account"] = account["account"]
             if row["id"] not in found or row["updated"] > found[row["id"]]["updated"]:
                 found[row["id"]] = row
-    for name in manager.config.get('history_homes', {}).get(provider, []):
+    history_homes = list(manager.config.get('history_homes', {}).get(provider, []))
+    if provider == 'codex' and (manager.state / 'restored/codex-index').is_dir():
+        history_homes.append(str(manager.state / 'restored/codex-index'))
+    for name in history_homes:
         home=Path(name)
         rows=codex_sessions(home) if provider=='codex' else claude_sessions(home)
         for row in rows:
@@ -153,7 +157,13 @@ def prepare_resume(manager, account, session, dry_run=False):
     if account.get("shared_sqlite_home"):
         # The official CLI resolves the ID and rollout path in the common native
         # state store, including paginated history. Never alter creator identity.
-        return ["resume", session["id"]]
+        from .codex_state import goal_index
+        selected = goal_index(manager, account, session['id'],
+                              session.get('sqlite_home') or account['shared_sqlite_home'],
+                              path=source)
+        options = [] if selected == Path(account['shared_sqlite_home']).absolute() else [
+            '-c', 'sqlite_home=' + json.dumps(str(selected))]
+        return [*options, "resume", session["id"]]
     try:
         source.resolve().relative_to((home/"sessions").resolve())
         return ["resume", session["id"]]

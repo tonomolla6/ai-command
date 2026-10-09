@@ -99,6 +99,35 @@ class CodexGoalRoutingTests(unittest.TestCase):
         self.assertFalse(Path(self.accounts[0]['home']).exists())
         self.assertFalse(any(self.home.glob('**/goals_*.sqlite')))
 
+    def test_unreadable_goal_database_does_not_hide_an_existing_objective(self):
+        (self.primary / 'goals_1.sqlite').write_bytes(b'not a sqlite database')
+        with self.assertRaisesRegex(ManagerError, 'goal'):
+            imported_resume(self.m, self.accounts[0], self.snapshot, dry_run=True)
+
+    def test_goal_without_accessible_thread_is_preserved(self):
+        self.goal(self.primary)
+        with sqlite3.connect(self.primary / 'state_5.sqlite') as db:
+            db.execute('delete from threads')
+        with self.assertRaisesRegex(ManagerError, 'goal'):
+            imported_resume(self.m, self.accounts[0], self.snapshot, dry_run=True)
+
+    def test_first_import_cannot_hide_goal_already_held_by_newer_native_history(self):
+        self.goal(self.primary)
+        (self.restored / 'state_5.sqlite').unlink()
+        command = imported_resume(self.m, self.accounts[1], self.snapshot, dry_run=True)
+        self.assertEqual(self.selected_index(command), self.primary)
+        self.snapshot['updated'] = 300
+        with self.assertRaisesRegex(ManagerError, 'goal'):
+            imported_resume(self.m, self.accounts[1], self.snapshot, dry_run=True)
+
+    def test_normal_resume_cannot_hide_goal_held_in_another_index(self):
+        self.goal(self.primary)
+        self.index(self.restored, self.path, updated=200)
+        session = next(s for s in list_sessions(self.m, 'codex', self.home / 'repo')
+                       if s['id'] == self.ident)
+        self.assertEqual(prepare_resume(self.m, self.accounts[0], session, dry_run=True),
+                         ['resume', self.ident])
+
 
 if __name__ == '__main__':
     unittest.main()

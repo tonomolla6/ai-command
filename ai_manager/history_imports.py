@@ -61,8 +61,8 @@ def mapped_directory(manager, cwd):
 
 def restored_path(manager, account, session):
     if account['provider'] == 'codex':
-        # An independent native index avoids selecting an older rollout with the
-        # same ID in the destination's existing database. Codex builds it itself.
+        # Codex builds the restoration index; existing native goals keep their
+        # original index when both indexes refer to the same native transcript.
         relative=Path(session.get('relative_path',''))
         if (relative.is_absolute() or '..' in relative.parts or not relative.parts or
                 not relative.name.startswith('rollout-') or not relative.name.endswith(session['id']+'.jsonl')):
@@ -169,6 +169,13 @@ def imported_resume(manager, account, session, dry_run=False):
     # native path, including its new events. Never restore a stale second copy.
     from .sessions import codex_sessions
     indexed=next((r for r in codex_sessions(native_state) if r['id']==session['id']),None)
+    from .codex_state import goal_index
+    selected_state = goal_index(manager, account, session['id'], native_state,
+                                path=indexed['path'] if indexed else None,
+                                snapshot_updated=session.get('updated'))
+    if selected_state != native_state:
+        return ['-c', 'sqlite_home=' + json.dumps(str(selected_state)),
+                'resume', session['id'], '-C', str(Path.cwd())]
     if indexed is None:
         restore_snapshot(manager, account, session, dry_run)
     if not dry_run:
