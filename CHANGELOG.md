@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.5.0 — 2026-10-09
 
 - Resume de Codex conserva el índice que contiene el goal cuando una conversación importada comparte el mismo transcript nativo: objetivo, presupuesto, contadores y estado permanecen intactos al cambiar de cuenta. Descubre también el índice restaurado y detecta conflictos sin fusionar bases ni recrear objetivos.
 - Pruebas de regresión cubren goals en ambos índices, cambios de perfil, restauración inicial, historiales distintos, conflictos y bases ilegibles.
