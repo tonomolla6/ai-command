@@ -198,6 +198,13 @@ oficial. Claude utiliza `CLAUDE_CONFIG_DIR` y reanuda transcripts por ruta nativ
 no necesita compartir todo su directorio `projects`. Los subagentes Codex no se
 ofrecen como conversaciones principales reanudables.
 
+Los goals de Codex pertenecen al hilo. Al reanudar un ID restaurado, el gestor
+conserva el índice que contiene su objetivo si ambos índices apuntan al mismo
+transcript nativo. No recrea la goal: mantiene presupuesto, tokens, tiempo y estado.
+Un conflicto entre objetivos o historiales produce un aviso y conserva los datos.
+Una goal pausada o detenida por cuota conserva ese estado; `/goal resume` permite
+continuarla desde la TUI tras elegir una cuenta con disponibilidad.
+
 `ai handoff` crea `.ai/handoff.md` con estado Git, resumen de archivos, commits
 recientes y tus notas. Incluye secciones para objetivo, trabajo, tests, decisiones
 y siguiente paso. No incluye contenido del diff, archivos `.env`, credenciales ni

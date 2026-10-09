@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Resume de Codex conserva el índice que contiene el goal cuando una conversación importada comparte el mismo transcript nativo: objetivo, presupuesto, contadores y estado permanecen intactos al cambiar de cuenta. Descubre también el índice restaurado y detecta conflictos sin fusionar bases ni recrear objetivos.
+- Pruebas de regresión cubren goals en ambos índices, cambios de perfil, restauración inicial, historiales distintos, conflictos y bases ilegibles.
 - La selección automática de Codex/Claude comparte la caché oficial de 120 segundos con uso, refresca sólo perfiles pendientes y evita consultas duplicadas entre lanzamientos simultáneos. Revalida al cruzar resets y permite `ai auto --refresh`; no reutiliza porcentajes históricos tras un fallo.
 - AI Command Agentes 0.1.14 añade puntos independientes de actividad y proveedor, colores por agente, temas claro/oscuro y alto contraste, texto accesible y detección nativa de AGY/OpenCode sin inferir actividad.
 - Pruebas con cuatro procesos verifican una sola consulta por cuenta; la selección reciente conserva el ID exacto de resume y las reglas de identidad/disponibilidad.
