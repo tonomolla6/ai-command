@@ -138,6 +138,7 @@ def list_sessions(manager, provider, cwd):
     for row in imported_sessions(manager,provider):
         if cwd is not None and not same_directory(mapped_directory(manager,row['cwd']),cwd):continue
         native=found.get(row['id'])
+        row['snapshot_updated'] = row['updated']
         if native:row['updated']=max(row['updated'],native['updated'])
         # Keep the import's native-index routing after subsequent local turns.
         found[row['id']]=row

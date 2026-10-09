@@ -128,6 +128,21 @@ class CodexGoalRoutingTests(unittest.TestCase):
         self.assertEqual(prepare_resume(self.m, self.accounts[0], session, dry_run=True),
                          ['resume', self.ident])
 
+    def test_indexed_thread_without_user_turns_does_not_lose_its_goal(self):
+        self.goal(self.primary)
+        with sqlite3.connect(self.restored / 'state_5.sqlite') as db:
+            db.execute('alter table threads add column has_user_event integer default 0')
+        self.snapshot['updated'] = 300
+        command = imported_resume(self.m, self.accounts[0], self.snapshot, dry_run=True)
+        self.assertEqual(self.selected_index(command), self.primary)
+
+    def test_snapshot_timestamp_is_not_confused_with_newer_local_recency(self):
+        self.goal(self.primary)
+        (self.restored / 'state_5.sqlite').unlink()
+        self.snapshot.update(updated=300, snapshot_updated=10)
+        command = imported_resume(self.m, self.accounts[0], self.snapshot, dry_run=True)
+        self.assertEqual(self.selected_index(command), self.primary)
+
 
 if __name__ == '__main__':
     unittest.main()

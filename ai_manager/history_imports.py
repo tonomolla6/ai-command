@@ -167,12 +167,13 @@ def imported_resume(manager, account, session, dry_run=False):
     native_state = manager.state / 'restored' / 'codex-index'
     # Once Codex has indexed the restored transcript, all accounts reuse that
     # native path, including its new events. Never restore a stale second copy.
-    from .sessions import codex_sessions
-    indexed=next((r for r in codex_sessions(native_state) if r['id']==session['id']),None)
-    from .codex_state import goal_index
+    # Exact resume IDs can already be indexed before their first user turn.
+    # The conversation picker deliberately filters those rows; routing must not.
+    from .codex_state import goal_index, index_thread
+    indexed = index_thread(native_state, session['id'])
     selected_state = goal_index(manager, account, session['id'], native_state,
                                 path=indexed['path'] if indexed else None,
-                                snapshot_updated=session.get('updated'))
+                                snapshot_updated=session.get('snapshot_updated', session.get('updated')))
     if selected_state != native_state:
         return ['-c', 'sqlite_home=' + json.dumps(str(selected_state)),
                 'resume', session['id'], '-C', str(Path.cwd())]
