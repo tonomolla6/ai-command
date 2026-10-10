@@ -218,7 +218,8 @@ def auto_launch(manager,args):
             message=(f'AI AUTO · {args.provider} · cuotas oficiales en caché (máximo {QUOTA_CACHE_TTL} s)…' if cached else
                      f'AI AUTO · consultando cuotas oficiales de {args.provider}…')
             print(colored(message,'title'),file=sys.stderr,flush=True)
-        entries=refresh_accounts(manager,args.provider,force=getattr(args,'refresh',False),notify=progress)
+        entries=refresh_accounts(manager,args.provider,force=getattr(args,'refresh',False),notify=progress,
+                                 recheck_unavailable=True)
         account=select_account(manager,args.provider,entries)
         row=entries[manager.key(account)]
     expiry=quota_expiry(row)
