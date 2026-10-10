@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Cuando la caché no ofrece ninguna cuenta disponible, Codex y Claude vuelven a consultar sus cuotas oficiales antes de rechazar una sesión nueva o un resume explícito. Detecta resets manuales sin esperar 120 segundos; mantiene las consultas en paralelo y comparte la comprobación entre arranques simultáneos, incluso si el saldo sigue agotado. Cada cuenta se consulta una sola vez por lanzamiento y se conservan las reglas de identidad, prioridad y disponibilidad.
+
 ## 1.5.0 — 2026-10-09
 
 - Resume de Codex conserva el índice que contiene el goal cuando una conversación importada comparte el mismo transcript nativo: objetivo, presupuesto, contadores y estado permanecen intactos al cambiar de cuenta. Descubre también el índice restaurado y detecta conflictos sin fusionar bases ni recrear objetivos.
