@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.5.1 — 2026-10-11
+
+- Corrige el primer inicio de cuentas Claude autenticadas con Claude Code 2.1.296: `ai login claude N` y los lanzadores reutilizan el login oficial existente y completan las dos preferencias de onboarding con backup. Conserva credenciales, confianza de proyectos y preferencias de permisos.
+- Pruebas de regresión verifican la reparación tras el login y que una versión aún no validada conserva las preferencias sin crear backups.
+
 ## 1.5.0 — 2026-10-09
 
 - Resume de Codex conserva el índice que contiene el goal cuando una conversación importada comparte el mismo transcript nativo: objetivo, presupuesto, contadores y estado permanecen intactos al cambiar de cuenta. Descubre también el índice restaurado y detecta conflictos sin fusionar bases ni recrear objetivos.
