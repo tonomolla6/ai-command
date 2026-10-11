@@ -67,6 +67,37 @@ class AuthenticatedOnboardingTests(unittest.TestCase):
         self.assertFalse(repair_onboarding(self.m, self.account, self.auth))
         self.assertEqual(self.prefs.read_bytes(), before)
 
+    def test_current_cli_login_repairs_onboarding_without_reauth_or_trust_changes(self):
+        args = argparse.Namespace(provider='claude', account='2', reauth=False)
+        before = self.prefs.read_bytes()
+        output = io.StringIO()
+        with patch('ai_manager.claude_setup.version', return_value='2.1.296 (Claude Code)'), \
+             patch('ai_manager.cli.sync_identity', return_value=self.account['email']), \
+             patch('ai_manager.claude_setup.executable', return_value='/official/claude'), \
+             patch('ai_manager.claude_setup.subprocess.run') as auth_status, \
+             patch('ai_manager.cli.subprocess.call') as oauth, \
+             contextlib.redirect_stdout(output):
+            auth_status.return_value.returncode = 0
+            auth_status.return_value.stdout = json.dumps(self.auth)
+            self.assertEqual(login(self.m, args), 0)
+        oauth.assert_not_called()
+        self.assertIn('primer inicio reparado', output.getvalue())
+        self.assertEqual(read_json(self.prefs), dict(self.original,
+            hasCompletedOnboarding=True, lastOnboardingVersion='2.1.296'))
+        self.assertEqual(self.credential.read_bytes(), self.before)
+        backups = list((self.home / '.ai-manager/backups').glob('*/.claude-account-2/.claude.json'))
+        self.assertEqual(len(backups), 1)
+        self.assertEqual(backups[0].read_bytes(), before)
+
+    def test_unverified_patch_version_preserves_preferences_without_backup(self):
+        before = self.prefs.read_bytes()
+        with patch('ai_manager.claude_setup.version', return_value='2.1.297 (Claude Code)'), \
+             self.assertRaises(ManagerError):
+            repair_onboarding(self.m, self.account, self.auth)
+        self.assertEqual(self.prefs.read_bytes(), before)
+        self.assertEqual(self.credential.read_bytes(), self.before)
+        self.assertFalse((self.home / '.ai-manager/backups').exists())
+
     def test_corrupt_preferences_and_symlinks_are_preserved(self):
         self.prefs.write_text('{broken')
         with self.assertRaises(ManagerError):repair_onboarding(self.m, self.account, self.auth)
