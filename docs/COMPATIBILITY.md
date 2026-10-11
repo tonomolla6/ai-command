@@ -6,13 +6,19 @@ El gestor inspecciona los ejecutables instalados; no instala versiones de provee
 |---|---|---|
 | Python | 3.12; mínimo de código 3.11 | Biblioteca estándar, `tomllib`, Linux PTY/flock |
 | Codex CLI | 0.160.0 / 0.160.1 | app-server local; `account/read`, `account/rateLimits/read`; `sqlite_home`; `--no-daemon` |
-| Claude Code | 2.1.284 | `/usage` con `--print --verbose --output-format stream-json`, sin turnos; `usage_report` estructurado |
+| Claude Code | 2.1.284 / 2.1.296 | Reparación del primer inicio autenticado; `/usage` con `--print --verbose --output-format stream-json`, sin turnos; `usage_report` estructurado |
 | Antigravity | 1.3.0 / 1.3.1 | `/usage`, `/credits`, `models` |
 | OpenCode | 1.18.34 / 1.18.35 | Catálogo actual; SQLite en sólo lectura para contadores locales |
 | VS Code | Adaptador base 1.136.1 / 1.136.2 | Orden de terminales; estado Claude 2.1.258/2.1.284 |
 
-Para otra versión Claude se conserva un PTY acotado, sin completar login,
-confianza ni diálogos. Si cambia el formato o falla la consulta, el resultado es
+La reparación del primer inicio comprueba la identidad con el CLI oficial y
+guarda un backup antes de completar sólo `hasCompletedOnboarding` y
+`lastOnboardingVersion`. No modifica credenciales, confianza de proyectos ni
+preferencias de permisos. Una versión no validada conserva las preferencias.
+
+La consulta `/usage` detecta el soporte local en el ejecutable instalado. Si no
+lo reconoce, conserva un PTY acotado, sin completar login, confianza ni diálogos.
+Si cambia el formato o falla la consulta, el resultado es
 UNKNOWN. Los parsers toleran campos opcionales y ventanas adicionales; no pueden
 garantizar formatos futuros de un proveedor.
 
