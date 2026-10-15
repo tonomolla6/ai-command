@@ -164,12 +164,13 @@ def monitor(manager,args,probe_factory=Probe):
                        f' · próxima en {countdown//60:02d}:{countdown%60:02d}'
                 # Use the same cards and layout as the normal command. Curses
                 # updates changed cells, without writing a new screen to scrollback.
-                lines=usage_lines(accounts,rows,format_reset,cached_age,getattr(args,'layout','auto'))[1:-1]
+                lines=usage_lines(accounts,rows,format_reset,cached_age,getattr(args,'layout','auto'),
+                                  compact=not getattr(args,'detailed',False))[1:-1]
                 page=max(1,height-3);offset=max(0,min(offset,max(0,len(lines)-page)))
                 frame=(height,width,offset,int(stamp),status)
                 if frame!=last_render:
                     screen.erase()
-                    _draw_line(screen,0,colored('AI USAGE · MONITORING · cada 5 minutos','title'),width,pairs)
+                    _draw_line(screen,0,colored('AI USAGE · MONITORING · cada 5 minutos · '+dt.datetime.now().astimezone().strftime('%Z'),'title'),width,pairs)
                     if height>1:_draw_line(screen,1,colored(status,'low' if probe is not None else 'muted'),width,pairs)
                     for y,line in enumerate(lines[offset:offset+page],2):
                         if y<height-1:_draw_line(screen,y,line,width,pairs)

@@ -82,7 +82,8 @@ def limits(manager,args):
             manager.save_limits(updated);entries.update(updated)
     rows=[entries.get(manager.key(a),{"provider":a["provider"],"account":a["account"],"status":"UNKNOWN","windows":[]}) for a in accounts]
     if args.json:print(json.dumps({"schema":1,"accounts":rows},indent=2));return 0
-    render_usage(accounts,rows,format_reset,cached_age,getattr(args,'layout','auto'))
+    render_usage(accounts,rows,format_reset,cached_age,getattr(args,'layout','auto'),
+                 compact=not getattr(args,'detailed',False))
     return 0
 
 
@@ -413,6 +414,7 @@ def parser():
         a=sub.add_parser(name);group=a.add_mutually_exclusive_group();group.add_argument('--refresh',action='store_true');group.add_argument('--cached',action='store_true');a.add_argument('--json',action='store_true');a.add_argument('--color',choices=['auto','always','never'],default='auto')
         a.add_argument('provider',nargs='?',choices=['codex','claude',*SINGLE_TOOLS],help='Consultar sólo este proveedor')
         a.add_argument('--layout',choices=['auto','columns','stacked'],default='auto')
+        a.add_argument('--detailed',action='store_true',help='Tarjetas completas, barras y catálogo; por defecto usa bloques compactos')
         a.add_argument('--monitoring',action='store_true',help='Panel vivo: consulta en segundo plano cada 5 minutos; q salir, r actualizar')
     a=sub.add_parser('add',help='Alta rápida por correo');a.add_argument('provider',choices=['codex','claude']);a.add_argument('email');a.add_argument('--id',dest='number');a.add_argument('--home')
     for name in ('enable','disable'):

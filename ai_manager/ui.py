@@ -226,8 +226,17 @@ def usage_lines(accounts,rows,reset,age,layout='auto',compact=False,reference=No
     def group(provider,card_width):
         title={'codex':'OPENAI / CODEX','claude':'ANTHROPIC / CLAUDE','agy':'AGY / ANTIGRAVITY','opencode':'OPENCODE / FREE'}[provider]
         if not any(a['provider']==provider for a in accounts):return []
-        result=[colored(fit(title,card_width),provider)]
-        result.extend(fit(line,card_width) for line in availability_lines(accounts,rows,provider,reset,reference))
+        if compact and provider=='opencode':title+=' · UNKNOWN'
+        result=[colored(fit(('╭─ ' if compact else '')+title,card_width),provider)]
+        if not (compact and provider=='opencode'):
+            result.extend(fit(line,card_width) for line in availability_lines(accounts,rows,provider,reset,reference))
+        if compact:
+            from .compact_usage import compact_account
+            for account,row in zip(accounts,rows):
+                if account['provider']==provider:
+                    result.extend(compact_account(account,row,card_width,reference,age))
+            result.append(colored('╰'+'─'*(card_width-1),provider))
+            return result
         result.append('')
         for account,row in zip(accounts,rows):
             if account['provider']==provider:
@@ -241,7 +250,9 @@ def usage_lines(accounts,rows,reset,age,layout='auto',compact=False,reference=No
     else:
         for provider in ('codex','claude','agy','opencode'):
             output.extend(group(provider,width))
-    output.append(colored('✓ correo verificado · caché 120s · --refresh actualiza','muted'))
+    footer=(reference.astimezone().strftime('%Z')+' · ✓ correo · ! bloqueado · R resets · ~ estimado · --detailed: ampliar' if compact else
+            '✓ correo verificado · caché 120s · --refresh actualiza')
+    output.append(colored(fit(footer,width).rstrip(),'muted'))
     return output
 
 

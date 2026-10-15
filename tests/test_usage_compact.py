@@ -1,6 +1,4 @@
-import contextlib
 import datetime as dt
-import io
 import os
 import unittest
 from unittest.mock import patch
@@ -43,7 +41,7 @@ def fixtures():
 
 
 class CompactUsageTests(unittest.TestCase):
-    def render(self,compact=True,width=138,provider=None,color='never'):
+    def render(self,compact=True,width=120,provider=None,color='never'):
         accounts,rows=fixtures()
         if provider:
             pairs=[(a,r) for a,r in zip(accounts,rows) if a['provider']==provider]
@@ -55,14 +53,13 @@ class CompactUsageTests(unittest.TestCase):
 
     def test_four_accounts_each_provider_and_both_other_tools_fit_in_24_lines(self):
         lines=self.render()
-        self.assertLessEqual(len(lines),24)
+        self.assertLessEqual(len(lines),22)
         text='\n'.join(lines)
         for provider in ('codex','claude'):
             for number in ('1','2','4','6'):self.assertIn(provider+number+'@example.invalid',text)
-        for name in ('OPENAI','ANTHROPIC','AGY','OPENCODE','Fable','Cr','R 2','Próx. conocido','48:'):
-            if name=='48:':continue
+        for name in ('OPENAI','ANTHROPIC','AGY','OPENCODE','Fable','Cr','R 2','Próx. conocido'):
             self.assertIn(name,text)
-        self.assertTrue(all(visible_width(line)<=138 for line in lines))
+        self.assertTrue(all(visible_width(line)<=120 for line in lines))
         self.assertNotIn('DemoFREE-0',text)
         self.assertIn('120 modelos FREE',text)
         self.assertIn('actividad local',text)
