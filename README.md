@@ -174,28 +174,22 @@ familia independiente; OpenCode conserva `UNKNOWN` si no publica resets.
 Al llegar a cero muestra «reset alcanzado», pendiente de una consulta oficial;
 no da por recuperada la cuota ni consume reinicios o créditos.
 
-En `--monitoring` la cuenta atrás baja cada segundo con el reloj local, sin
-consultas adicionales ni turnos al modelo. Las cuotas se siguen consultando
-cada cinco minutos y puedes actualizarlas con `r`. El modo detallado también
-está disponible como `ai usage --monitoring --detailed`.
-
-Codex, Claude y AGY/OpenCode ocupan tres columnas en terminales anchas. Las tarjetas
-incluyen correo verificado, ventanas publicadas, reset, créditos y fecha de consulta.
-Una ventana semanal general agotada pone las dependientes en rojo y muestra
-`BLOQUEADO`, conservando sus porcentajes originales.
+Una ventana semanal general agotada pone las dependientes en rojo, conservando
+sus porcentajes originales: `!` en compacto o `BLOQUEADO` en modo detallado.
 
 El modo `--monitoring` ocupa la terminal como un monitor de sistema. Mantiene
-las tarjetas con colores y columnas, muestra la cuenta atrás y consulta todas
-las cuentas seleccionadas en paralelo cada cinco minutos. Las consultas se
+los bloques con colores y columnas, y la cuenta atrás baja cada segundo con el
+reloj local, sin consultas adicionales. Consulta todas las cuentas seleccionadas
+en paralelo cada cinco minutos. Las consultas se
 ejecutan en segundo plano mientras el panel está abierto; los datos anteriores
 siguen visibles hasta que termina la consulta, sin generar turnos al modelo.
 Usa `r` para actualizar, `q` o `Ctrl+C` para salir, flechas o rueda para desplazarte
 y `PgUp`/`PgDn` para pasar de página. Conserva la pantalla anterior al salir y
 adapta el panel al cambiar el tamaño de la terminal. Si una consulta sigue activa,
 espera a que termine antes de empezar otra. El modo requiere una terminal
-interactiva y admite el filtro de proveedor, `--layout` y `--color`.
+interactiva y admite el filtro de proveedor, `--layout`, `--color` y `--detailed`.
 
-`Resets: 2 disponibles` muestra los reinicios manuales que publica la cuenta,
+`R 2` (o `Resets: 2 disponibles` en modo detallado) muestra los reinicios manuales que publica la cuenta,
 separados del saldo de créditos y de la fecha del próximo reinicio automático.
 Codex proporciona el contador mediante su
 [protocolo oficial](https://developers.openai.com/codex/app-server/).
