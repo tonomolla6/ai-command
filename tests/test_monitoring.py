@@ -133,7 +133,7 @@ class MonitoringTests(unittest.TestCase):
              for a in accounts})
         self.start('countdown')
         def remaining():
-            match=re.search(r'~(\d\d):(\d\d):(\d\d)',self.screen.text())
+            match=re.search(r'~(\d\d)h (\d\d)m (\d\d)s',self.screen.text())
             return sum(int(v)*n for v,n in zip(match.groups(),(3600,60,1))) if match else None
         self.pump(lambda:remaining() is not None and (self.manager.state/'child.pid').exists())
         initial=remaining()

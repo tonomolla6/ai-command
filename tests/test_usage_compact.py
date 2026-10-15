@@ -4,7 +4,7 @@ import unittest
 from unittest.mock import patch
 
 from ai_manager.cli import parser
-from ai_manager.ui import ANSI, usage_lines, visible_width
+from ai_manager.ui import ANSI, availability_lines, usage_lines, visible_width
 from ai_manager.compact_usage import compact_account
 
 
@@ -82,6 +82,23 @@ class CompactUsageTests(unittest.TestCase):
                     self.assertRegex(text,r'Fable [█░]{3,6}94%!')
                     self.assertLessEqual(len(lines),22)
                     self.assertTrue(all(visible_width(line)<=width for line in lines))
+
+    def test_provider_headers_show_readable_recovery_or_reset_with_available_accounts(self):
+        accounts,rows=fixtures()
+        for provider in ('codex','claude','agy'):
+            with self.subTest(provider=provider),patch.dict(os.environ,{'AI_MANAGER_COLOR':'never'}):
+                own=[i for i,a in enumerate(accounts) if a['provider']==provider]
+                windows=rows[own[0]]['windows']
+                for w in (windows[:2] if provider=='agy' else windows):w['available_percent']=80
+                lines=availability_lines(accounts,rows,provider,lambda w:'17/10 12:00 CEST',NOW)
+                self.assertIn('Con cuota:',lines[0])
+                self.assertIn('Próx.',lines[1])
+                self.assertIn('~2d 00h 00m 00s',lines[1])
+                for i in own:
+                    for w in rows[i]['windows']:w['available_percent']=80
+                lines=availability_lines(accounts,rows,provider,lambda w:'17/10 12:00 CEST',NOW)
+                self.assertIn('Reset ',lines[1]);self.assertIn('~01h 00m 00s',lines[1])
+                self.assertEqual(len(lines),2)
 
     def test_bar_fill_and_color_preserve_blocked_window_percentages(self):
         accounts,rows=fixtures();a,r=accounts[4],rows[4]
