@@ -4,7 +4,7 @@ import unittest
 from unittest.mock import patch
 
 from ai_manager.cli import parser
-from ai_manager.ui import usage_lines, visible_width
+from ai_manager.ui import ANSI, usage_lines, visible_width
 from ai_manager.compact_usage import compact_account
 
 
@@ -70,6 +70,34 @@ class CompactUsageTests(unittest.TestCase):
         text='\n'.join(self.render(compact=False))
         self.assertIn('DemoFREE-0',text);self.assertIn('Créditos:',text)
         self.assertGreater(len(text.splitlines()),24)
+
+    def test_compact_windows_have_bars_without_adding_rows(self):
+        for width in (120,138,180):
+            for color in ('always','never'):
+                with self.subTest(width=width,color=color):
+                    lines=self.render(width=width,color=color)
+                    text=ANSI.sub('','\n'.join(lines))
+                    self.assertRegex(text,r'5h [█░]{3,6}75%!')
+                    self.assertRegex(text,r'7d ░{3,6}0%')
+                    self.assertRegex(text,r'Fable [█░]{3,6}94%!')
+                    self.assertLessEqual(len(lines),22)
+                    self.assertTrue(all(visible_width(line)<=width for line in lines))
+
+    def test_bar_fill_and_color_preserve_blocked_window_percentages(self):
+        accounts,rows=fixtures();a,r=accounts[4],rows[4]
+        r=dict(r,windows=[dict(w,available_percent=value) for w,value in zip(r['windows'],(0,50,100))])
+        with patch.dict(os.environ,{'AI_MANAGER_COLOR':'always'}):
+            text='\n'.join(compact_account(a,r,80,NOW,lambda r:0))
+        for metric in ('5h ░░░░░░0%','7d ███░░░50%!','Fable ██████100%!'):
+            self.assertIn('\x1b[31m'+metric+'\x1b[0m',text)
+
+    def test_unknown_window_never_gets_an_empty_availability_bar(self):
+        accounts,rows=fixtures();a,r=accounts[0],rows[0]
+        for value in (None,True,float('nan'),float('inf')):
+            with self.subTest(value=value),patch.dict(os.environ,{'AI_MANAGER_COLOR':'never'}):
+                text='\n'.join(compact_account(a,dict(r,windows=[dict(r['windows'][0],available_percent=value)]),80,NOW,lambda r:0))
+                self.assertIn('UNKNOWN',text)
+                self.assertNotIn('░',text)
 
     def test_single_provider_uses_all_width_and_no_other_provider_is_displayed(self):
         lines=self.render(provider='claude',width=80)
