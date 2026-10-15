@@ -11,7 +11,7 @@ import time
 import unittest
 from unittest.mock import patch
 
-from ai_manager.core import Manager, ManagerError, now, read_json, write_json
+from ai_manager.core import Manager, ManagerError, read_json, write_json
 from ai_manager.distribution import install
 from ai_manager.providers import executable
 
@@ -50,7 +50,7 @@ class ExecutableRecoveryTests(unittest.TestCase):
 
     def test_permanently_broken_link_has_a_bounded_wait_and_clear_error(self):
         self.binary.unlink()
-        with patch('ai_manager.providers.EXECUTABLE_RECOVERY_SECONDS',.03,create=True):
+        with patch('ai_manager.providers.EXECUTABLE_RECOVERY_SECONDS',.03):
             with self.assertRaisesRegex(ManagerError,'actualización|actualizando'):
                 executable('claude')
 
@@ -88,7 +88,7 @@ else:
                     write_json(manager.credential(a),{'claudeAiOauth':{'accessToken':'test-only'}})
                     write_json(profile/'.claude.json',{'hasCompletedOnboarding':True})
                     accounts.append(a)
-                write_json(manager.config_path,{'schema':1,'accounts':accounts,'claude_skip_permissions':True})
+                write_json(manager.config_path,{'schema':1,'manager_schema':1,'accounts':accounts,'claude_skip_permissions':True})
                 write_json(manager.state/'update-check.json',{'checked_at':time.time()})
                 ident='11111111-2222-4333-8444-555555555555'
                 transcript=Path(accounts[1]['home'])/'projects'/'project'/(ident+'.jsonl')
