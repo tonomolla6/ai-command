@@ -130,6 +130,12 @@ a la vez, uno consulta y los demás reutilizan el resultado. El mensaje indica
 cuándo está usando caché. Las cuotas desconocidas, agotadas o con identidad no
 verificada siguen excluidas de la selección automática.
 
+Si la caché no permite elegir ninguna cuenta, vuelve a consultar las cuentas
+rechazadas antes de dar el error. Así detecta un reset que hayas hecho manualmente,
+también al reanudar un ID concreto. Cada cuenta se consulta como máximo una vez
+por lanzamiento y los arranques simultáneos comparten esa comprobación. Si las
+cuotas recién consultadas siguen agotadas o desconocidas, termina sin reintentar.
+
 Para comprobar las cuotas ahora, usa `ai usage claude --refresh` antes de reanudar,
 o `ai auto claude --refresh --resume --session ID`. La cuenta elegida confirma
 su identidad de nuevo al ejecutar el CLI.

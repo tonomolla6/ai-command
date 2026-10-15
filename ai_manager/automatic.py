@@ -112,8 +112,8 @@ def quota_cache_current(account, entry, reference):
     return True
 
 
-def refresh_accounts(manager, provider, force=False, notify=None):
-    """Reuse recent usage; one process refreshes each provider's automatic pool."""
+def refresh_accounts(manager, provider, force=False, notify=None, recheck_unavailable=False):
+    """Reuse recent usage, rechecking cached rejection once when launching."""
     accounts = [a for a in manager.accounts(provider) if a.get('automatic') is not False and manager.has_auth(a)]
 
     def read_cache():
@@ -122,23 +122,48 @@ def refresh_accounts(manager, provider, force=False, notify=None):
         pending = [a for a in accounts if force or not quota_cache_current(a, previous.get(manager.key(a)), reference)]
         return previous, pending
 
+    def unavailable(entries):
+        if not recheck_unavailable:return False
+        try:select_account(manager, provider, entries)
+        except ManagerError:return True
+        return False
+
     previous, pending = read_cache()
-    if not pending:
+    initial = previous
+    if not pending and not unavailable(previous):
         if notify:notify(True)
         return {manager.key(a):previous[manager.key(a)] for a in accounts}
     # Separate from the account/probe and cache-write locks. Waiters reread the
     # result written by the first launcher instead of repeating its CLI calls.
     with manager.lock('auto-quotas-' + provider, timeout=90):
         previous, pending = read_cache()
-        if notify:notify(not pending)
-        if pending:
-            entries = collect_limits(manager, pending)
+        queried = set()
+
+        def refresh(batch):
+            if not batch:return
+            if notify:notify(False)
+            entries = collect_limits(manager, batch)
+            # Subsecond precision distinguishes a new official observation even
+            # if a concurrent probe returns identical quota within one second.
+            checked_at = dt.datetime.now(dt.timezone.utc).isoformat()
             for key, entry in entries.items():
+                entry['queried_at'] = checked_at
                 if entry['status'] == 'UNKNOWN' and previous.get(key, {}).get('windows'):
                     old = previous[key]
                     entry['previous_success'] = {'queried_at': old.get('queried_at'), 'windows': old['windows']}
             manager.save_limits(entries)
             previous.update(entries)
+            queried.update(entries)
+
+        refresh(pending)
+        if unavailable(previous):
+            # Only recheck observations this invocation actually reused. Never
+            # repeat its fresh probes, or probes completed by another launcher
+            # while waiting for this lock. No fallback to historical success.
+            retry = [a for a in accounts if manager.key(a) not in queried and
+                     previous.get(manager.key(a)) == initial.get(manager.key(a))]
+            refresh(retry)
+        if not queried and notify:notify(True)
         return {manager.key(a):previous[manager.key(a)] for a in accounts}
 
 

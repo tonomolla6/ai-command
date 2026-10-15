@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Cuando la caché no ofrece ninguna cuenta disponible, Codex y Claude vuelven a consultar sus cuotas oficiales antes de rechazar una sesión nueva o un resume explícito. Detecta resets manuales sin esperar 120 segundos; mantiene las consultas en paralelo y comparte la comprobación entre arranques simultáneos, incluso si el saldo sigue agotado. Cada cuenta se consulta una sola vez por lanzamiento y se conservan las reglas de identidad, prioridad y disponibilidad.
+
 ## 1.5.1 — 2026-10-11
 
 - Corrige el primer inicio de cuentas Claude autenticadas con Claude Code 2.1.296: `ai login claude N` y los lanzadores reutilizan el login oficial existente y completan las dos preferencias de onboarding con backup. Conserva credenciales, confianza de proyectos y preferencias de permisos.

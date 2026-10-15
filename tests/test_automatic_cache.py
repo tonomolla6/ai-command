@@ -22,7 +22,7 @@ def observation(account, available=70):
             'queried_at': now(), 'windows': [{'name': 'weekly', 'available_percent': available}]}
 
 
-def simultaneous_launch(home, start, results):
+def simultaneous_launch(home, start, results, recheck_unavailable=False, available=70):
     """Independent processes exercise flock and the real atomic cache writes."""
     manager = Manager(home)
     def query(manager, account):
@@ -30,11 +30,12 @@ def simultaneous_launch(home, start, results):
         try:os.write(fd, (account['account'] + '\n').encode())
         finally:os.close(fd)
         time.sleep(.3)
-        return observation(account)
+        return observation(account, available)
     try:
         start.wait(timeout=8)
         with patch('ai_manager.automatic.query_limits', side_effect=query):
-            rows = refresh_accounts(manager, 'claude')
+            options = {'recheck_unavailable': True} if recheck_unavailable else {}
+            rows = refresh_accounts(manager, 'claude', **options)
         results.put(sorted(rows))
     except Exception as exc:results.put(type(exc).__name__)
 
@@ -170,3 +171,104 @@ class AutomaticCacheTests(unittest.TestCase):
         self.assertIn('cuotas oficiales en caché', err.getvalue())
         self.assertNotIn('consultando cuotas', err.getvalue())
         self.assertEqual(json.loads(out.getvalue())['session_id'], args.session)
+
+    def test_cached_exhaustion_rechecks_before_new_and_exact_resume_for_both_providers(self):
+        for provider in ('codex', 'claude'):
+            for resume in (False, True):
+                with self.subTest(provider=provider, resume=resume):
+                    rows = self.seed()
+                    for row in rows.values():row['windows'][0]['available_percent'] = 0
+                    self.manager.save_limits(rows)
+                    args = argparse.Namespace(provider=provider, dry_run=True, resume=resume,
+                                              session='requested-thread' if resume else None, extra=[])
+                    session = {'id': 'requested-thread'}
+                    with contextlib.redirect_stderr(io.StringIO()), \
+                         patch('ai_manager.automatic.query_limits', side_effect=lambda m, a: observation(a)) as query, \
+                         patch('ai_manager.cli.list_sessions', return_value=[session]) as sessions, \
+                         patch('ai_manager.cli.launch', return_value=0) as launch:
+                        self.assertEqual(auto_launch(self.manager, args), 0)
+                    self.assertEqual(query.call_count, 1 if provider == 'codex' else 2)
+                    self.assertEqual({call.args[1]['provider'] for call in query.call_args_list}, {provider})
+                    self.assertEqual(launch.call_args.kwargs['session'], session if resume else None)
+                    self.assertEqual(launch.call_args.kwargs['resume'], resume)
+                    if not resume:sessions.assert_not_called()
+
+    def test_no_second_query_when_observations_are_already_fresh_or_forced(self):
+        for force in (False, True):
+            with self.subTest(force=force):
+                self.manager.save_limits({self.manager.key(a): observation(a, 0) for a in self.accounts})
+                if not force:(self.manager.state / 'limits.json').unlink()
+                with patch('ai_manager.automatic.query_limits', side_effect=lambda m, a: observation(a, 0)) as query:
+                    rows = refresh_accounts(self.manager, 'claude', force=force, recheck_unavailable=True)
+                self.assertEqual(query.call_count, 2)
+                with self.assertRaises(ManagerError):select_account(self.manager, 'claude', rows)
+
+    def test_partial_refresh_rechecks_only_other_cached_exhausted_accounts(self):
+        rows = self.seed()
+        rows['claude:2']['queried_at'] = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(seconds=121)).isoformat()
+        rows['claude:4']['windows'][0]['available_percent'] = 0
+        self.manager.save_limits(rows)
+        with patch('ai_manager.automatic.query_limits',
+                   side_effect=lambda m, a: observation(a, 0 if a['account'] == '2' else 70)) as query:
+            rows = refresh_accounts(self.manager, 'claude', recheck_unavailable=True)
+        self.assertEqual([call.args[1]['account'] for call in query.call_args_list], ['2', '4'])
+        self.assertEqual(select_account(self.manager, 'claude', rows)['account'], '4')
+
+    def test_unknown_or_wrong_identity_after_recheck_never_launches_or_uses_previous_success(self):
+        for change in ({'status': 'UNKNOWN', 'windows': []}, {'email': 'other@example.invalid'}):
+            with self.subTest(change=change):
+                rows = self.seed()
+                for row in rows.values():row['windows'][0]['available_percent'] = 0
+                self.manager.save_limits(rows)
+                def query(manager, account):
+                    row = observation(account)
+                    row.update(change)
+                    return row
+                args = argparse.Namespace(provider='claude', dry_run=True, resume=True,
+                                          session='requested-thread', extra=[])
+                with contextlib.redirect_stderr(io.StringIO()), \
+                     patch('ai_manager.automatic.query_limits', side_effect=query) as read, \
+                     patch('ai_manager.cli.launch') as launch, self.assertRaises(ManagerError):
+                    auto_launch(self.manager, args)
+                self.assertEqual(read.call_count, 2)
+                launch.assert_not_called()
+
+    def test_recheck_stays_inside_authenticated_enabled_automatic_provider_pool(self):
+        rows = self.seed()
+        for row in rows.values():row['windows'][0]['available_percent'] = 0
+        self.manager.save_limits(rows)
+        for account in self.accounts:
+            if account['provider'] == 'claude':
+                account['automatic'] = False
+        with patch('ai_manager.automatic.query_limits') as query:
+            self.assertEqual(refresh_accounts(self.manager, 'claude', recheck_unavailable=True), {})
+        query.assert_not_called()
+        self.accounts[0]['automatic'] = True
+        self.manager.credential(self.accounts[0]).unlink()
+        with patch('ai_manager.automatic.query_limits') as query:
+            self.assertEqual(refresh_accounts(self.manager, 'claude', recheck_unavailable=True), {})
+        query.assert_not_called()
+
+    def test_four_simultaneous_rechecks_share_one_query_even_when_still_exhausted(self):
+        rows = self.seed()
+        # Match even the second-resolution timestamp returned by the probe;
+        # concurrent waiters must recognize a new observation with unchanged quota.
+        for row in rows.values():row['windows'][0]['available_percent'] = 0
+        self.manager.save_limits(rows)
+        context = multiprocessing.get_context('fork')
+        start = context.Barrier(4)
+        results = context.Queue()
+        processes = [context.Process(target=simultaneous_launch,
+                     args=(str(self.home), start, results, True, 0)) for _ in range(4)]
+        try:
+            for process in processes:process.start()
+            for _ in processes:self.assertEqual(results.get(timeout=12), ['claude:2', 'claude:4'])
+            for process in processes:
+                process.join(timeout=5)
+                self.assertEqual(process.exitcode, 0)
+            self.assertEqual(sorted((self.manager.state / 'probe-count').read_text().splitlines()), ['2', '4'])
+        finally:
+            for process in processes:
+                if process.is_alive():process.terminate()
+                process.join(timeout=5)
+            results.close();results.join_thread()
