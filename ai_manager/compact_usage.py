@@ -1,4 +1,5 @@
 """Compact provider blocks; the detailed cards remain available on request."""
+import math
 import textwrap
 
 from .availability import instant
@@ -38,21 +39,32 @@ def _short_reset(window,reference):
 
 def _window_lines(windows,provider,width,reference):
     blocked=blocked_windows(provider,windows)
-    values=[];resets={}
+    metrics=[];resets={}
     for window in windows:
         label=_label(window)
         value=window.get('available_percent')
-        valid=isinstance(value,(int,float)) and not isinstance(value,bool)
+        valid=isinstance(value,(int,float)) and not isinstance(value,bool) and math.isfinite(value)
         is_blocked=window in blocked
         text=f'{value:g}%'+('!' if is_blocked and value>0 else '') if valid else 'UNKNOWN'
         style='empty' if is_blocked else 'ok' if valid and value>=25 else 'low' if valid else 'muted'
         short=fit(label,min(12,max(3,width-len(text)-1))).rstrip()
-        values.append(colored(short+text,style))
+        metrics.append((short,text,style,value if valid else None))
         # Weekly model and global allowances often reset together. Keep both
         # labels, sharing their timestamp rather than printing the date twice.
         reset=_short_reset(window,reference)
         resets.setdefault(reset,[]).append(short.replace('Fable','F'))
-    lines=_pack(values,width)
+    def values(size):
+        result=[]
+        for label,text,style,value in metrics:
+            if value is None:result.append(colored(label+' '+text,style));continue
+            filled=round(max(0,min(100,value))/100*size)
+            result.append(colored(label+' '+'█'*filled+'░'*(size-filled)+text,style))
+        return result
+    # Spend spare horizontal space on bars, keeping three model windows on
+    # one row in a narrow column. Exact percentages remain beside every bar.
+    size=6
+    while size>3 and visible_width(' '.join(values(size)))>width:size-=1
+    lines=_pack(values(size),width,separator=' ')
     reset_parts=['+'.join(dict.fromkeys(labels))+' '+value for value,labels in resets.items()]
     lines.extend(colored('↻ '+line,'muted') for line in _pack(reset_parts,max(1,width-2)))
     return lines
@@ -112,11 +124,11 @@ def compact_account(account,row,width,reference,age):
     if elapsed is not None and elapsed>=120:extras.append('STALE')
     remaining=[]
     for item in extras:
-        # Use spare space on existing quota/reset lines before adding another
-        # metadata row, including when weekly model resets fall on different days.
-        target=metrics_at if item.startswith('Cr ') else len(body)-1
-        if (provider in ('codex','claude') and row.get('status')=='OK' and windows and
-                target<len(body) and visible_width(body[target]+' · '+item)<=inner):
+        # Reuse quota/reset rows so bars do not add a metadata row per account.
+        # Prefer credits beside percentages and timestamps beside reset dates.
+        targets=range(metrics_at,len(body)) if item.startswith('Cr ') else range(len(body)-1,metrics_at-1,-1)
+        target=next((index for index in targets if visible_width(body[index]+' · '+item)<=inner),None)
+        if provider in ('codex','claude') and row.get('status')=='OK' and windows and target is not None:
             body[target]+=' · '+colored(item,'muted')
         else:remaining.append(item)
     body.extend(colored(line,'muted') for line in _pack(remaining,inner))
