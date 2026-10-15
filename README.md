@@ -13,7 +13,7 @@
 Gestor local para **Codex CLI, Claude Code, Antigravity y OpenCode**.
 Credenciales por cuenta, cuotas en paralelo y continuidad en tu directorio de trabajo.
 
-![Panel de uso en tres columnas, con datos ficticios](docs/images/usage.png)
+![Vista detallada en tres columnas, con datos ficticios: ai usage --detailed](docs/images/usage.png)
 
 *Captura del renderizador real con datos ficticios. Las cuotas y créditos dependen de cada proveedor y plan.*
 
@@ -147,12 +147,37 @@ ai usage                    # consulta en paralelo; caché de 120 segundos
 ai usage --refresh          # consulta fresca de todas las cuentas activas
 ai usage --cached           # sólo caché local
 ai usage --json             # datos estructurados para tus scripts
+ai usage --detailed         # tarjetas completas, barras y catálogo
 ai usage --monitoring       # panel vivo; actualiza cuotas cada cinco minutos
 ai usage codex --monitoring # el mismo panel, sólo para Codex
 ai usage codex              # sólo Codex; también claude, agy u opencode
 ai usage agy --refresh      # consultar únicamente AGY de nuevo
 ai usage --layout stacked   # tarjetas verticales para terminales estrechas
 ```
+
+La vista compacta es la predeterminada: agrupa las cuentas de cada proveedor
+en un bloque, con correo, porcentajes, fechas de reset, créditos y última
+consulta. Codex y Claude mantienen sus columnas; AGY y OpenCode comparten la
+tercera. Cuatro cuentas por proveedor caben en una terminal de 120 × 24 en el
+caso habitual. `--detailed` conserva las tarjetas completas y el catálogo.
+`R` indica resets manuales, `!` una ventana bloqueada y `[M]` una cuenta manual;
+la zona horaria aparece al pie. Las referencias de tokens de OpenCode siguen
+siendo actividad local, no cuota disponible.
+
+Si no queda ninguna cuenta con cuota verificada, la cabecera muestra la próxima
+recuperación conocida y una cuenta atrás: `Próx. conocido: x4`, por ejemplo.
+Es una estimación según la última consulta oficial: espera al reset más tardío
+de las ventanas agotadas de cada cuenta y después elige la cuenta que se
+recuperaría antes. Excluye cuentas desactivadas, reservadas para selección
+manual y observaciones con identidad o límites desconocidos. AGY calcula cada
+familia independiente; OpenCode conserva `UNKNOWN` si no publica resets.
+Al llegar a cero muestra «reset alcanzado», pendiente de una consulta oficial;
+no da por recuperada la cuota ni consume reinicios o créditos.
+
+En `--monitoring` la cuenta atrás baja cada segundo con el reloj local, sin
+consultas adicionales ni turnos al modelo. Las cuotas se siguen consultando
+cada cinco minutos y puedes actualizarlas con `r`. El modo detallado también
+está disponible como `ai usage --monitoring --detailed`.
 
 Codex, Claude y AGY/OpenCode ocupan tres columnas en terminales anchas. Las tarjetas
 incluyen correo verificado, ventanas publicadas, reset, créditos y fecha de consulta.
