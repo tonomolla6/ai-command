@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Las cabeceras conservan el próximo retorno de Codex, Claude y AGY aunque otra cuenta ya tenga cuota; si todas tienen cuota muestran el próximo reset publicado. El contador expresa días, horas, minutos y segundos, sin aumentar la frecuencia de consultas ni inferir resets de OpenCode.
 - La vista compacta añade barras de disponibilidad de 3–6 celdas por ventana, adaptadas al ancho de las columnas. Mantiene porcentajes exactos y el rojo de ventanas bloqueadas; aprovecha el espacio de las fechas para conservar cuatro cuentas sin filas adicionales en una terminal de 120 × 24.
 - `ai usage` y `ai limits` usan bloques compactos por proveedor para mostrar más cuentas sin scroll. Conservan correos, ventanas, resets, créditos, colores y fecha de consulta; `--detailed` recupera las tarjetas completas y el catálogo. El monitor usa el mismo formato y conserva su actualización en segundo plano.
 - La cabecera muestra la próxima recuperación conocida cuando no hay cuentas automáticas con cuota, considerando todas las ventanas agotadas y familias independientes de AGY. La cuenta atrás se actualiza localmente cada segundo en el monitor, sin más consultas; `UNKNOWN` y los resets alcanzados nunca se convierten en disponibilidad inventada.

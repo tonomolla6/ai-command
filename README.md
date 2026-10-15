@@ -167,13 +167,18 @@ caso habitual. `--detailed` conserva las tarjetas completas y el catálogo.
 la zona horaria aparece al pie. Las referencias de tokens de OpenCode siguen
 siendo actividad local, no cuota disponible.
 
-Si no queda ninguna cuenta con cuota verificada, la cabecera muestra la próxima
-recuperación conocida y una cuenta atrás: `Próx. conocido: x4`, por ejemplo.
+La cabecera muestra las cuentas con cuota y la próxima recuperación conocida,
+incluso si quedan otras disponibles: `Próx. c4: ~1d 03h 20m 15s`, por ejemplo.
+Si todas las cuentas verificadas tienen cuota, muestra el próximo reset
+publicado: `Reset x2: ~02h 15m 00s`. Son dos datos distintos: el retorno de una
+cuenta agotada y la renovación de una ventana que todavía tiene cuota.
+Si no queda ninguna disponible, conserva `Próx. conocido: x4` y la fecha.
 Es una estimación según la última consulta oficial: espera al reset más tardío
 de las ventanas agotadas de cada cuenta y después elige la cuenta que se
 recuperaría antes. Excluye cuentas desactivadas, reservadas para selección
 manual y observaciones con identidad o límites desconocidos. AGY calcula cada
 familia independiente; OpenCode conserva `UNKNOWN` si no publica resets.
+Sin fechas publicadas no se inventa una cuenta atrás.
 Al llegar a cero muestra «reset alcanzado», pendiente de una consulta oficial;
 no da por recuperada la cuota ni consume reinicios o créditos.
 
