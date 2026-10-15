@@ -47,7 +47,7 @@ def _window_lines(windows,provider,width,reference):
         text=f'{value:g}%'+('!' if is_blocked and value>0 else '') if valid else 'UNKNOWN'
         style='empty' if is_blocked else 'ok' if valid and value>=25 else 'low' if valid else 'muted'
         short=fit(label,min(12,max(3,width-len(text)-1))).rstrip()
-        values.append(colored(short+' '+text,style))
+        values.append(colored(short+text,style))
         # Weekly model and global allowances often reset together. Keep both
         # labels, sharing their timestamp rather than printing the date twice.
         reset=_short_reset(window,reference)
@@ -79,6 +79,7 @@ def compact_account(account,row,width,reference,age):
     heading=alias+' '+email+(' ✓' if verified else ' ○')
     body=[colored(line,'bold') for line in textwrap.wrap(heading,width=inner)] if not account.get('single') or row.get('email') or account.get('email') else []
     windows=row.get('windows',[])
+    metrics_at=len(body)
     if row.get('status')=='OK' and windows:
         if provider=='agy':
             families=dict.fromkeys(w['name'].rsplit(' · ',1)[0] for w in windows)
@@ -109,7 +110,16 @@ def compact_account(account,row,width,reference,age):
     if queried:extras.append('@'+queried.astimezone().strftime('%H:%M'))
     elapsed=age(row)
     if elapsed is not None and elapsed>=120:extras.append('STALE')
-    body.extend(colored(line,'muted') for line in _pack(extras,inner))
+    remaining=[]
+    for item in extras:
+        # Use spare space on existing quota/reset lines before adding another
+        # metadata row, including when weekly model resets fall on different days.
+        target=metrics_at if item.startswith('Cr ') else len(body)-1
+        if (provider in ('codex','claude') and row.get('status')=='OK' and windows and
+                target<len(body) and visible_width(body[target]+' · '+item)<=inner):
+            body[target]+=' · '+colored(item,'muted')
+        else:remaining.append(item)
+    body.extend(colored(line,'muted') for line in _pack(remaining,inner))
     if activity:
         body.append(colored('actividad local · % pico (no cuota)','muted'))
         values=[]

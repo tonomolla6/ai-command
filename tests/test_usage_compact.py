@@ -24,7 +24,7 @@ def fixtures():
             if provider=='claude':windows.append(dict(windows[-1],name='Current week (Fable)',available_percent=94))
             row={'provider':provider,'account':number,'email':a['email'],'email_verified':True,
                  'status':'OK','queried_at':NOW.isoformat(),'windows':windows,
-                 'credits':{'display':'Desactivados'},'reset_credits_available':2}
+                 'credits':{'display':'Desactivados'},'reset_credits_available':2 if provider=='codex' else None}
             accounts.append(a);rows.append(row)
     accounts.extend([{'provider':p,'account':'current','label':p,'single':True} for p in ('agy','opencode')])
     rows.extend([{'provider':'agy','account':'current','status':'OK','queried_at':NOW.isoformat(),
@@ -106,3 +106,16 @@ class CompactUsageTests(unittest.TestCase):
                 text='\n'.join(compact_account(dict(a,automatic=automatic,fixed_model='example-model'),r,80,NOW,lambda r:0))
             self.assertEqual('[M]' in text,not automatic)
             self.assertEqual('manual' in text,not automatic)
+
+    def test_different_weekly_model_resets_and_stale_metadata_still_fit(self):
+        accounts,rows=fixtures()
+        for a,row in zip(accounts,rows):
+            if a['provider']=='claude':row['windows'][-1]['reset_at']=(NOW+dt.timedelta(days=3)).isoformat()
+        with patch('ai_manager.ui.shutil.get_terminal_size',return_value=os.terminal_size((120,24))), \
+             patch.dict(os.environ,{'AI_MANAGER_COLOR':'never'}):
+            lines=usage_lines(accounts,rows,lambda w:'17/10 12:00 CEST',lambda r:180,
+                              compact=True,reference=NOW)
+        text='\n'.join(lines)
+        self.assertLessEqual(len(lines),22)
+        self.assertIn('17/10',text);self.assertIn('18/10',text)
+        self.assertIn('STALE',text);self.assertIn('Cr OFF',text)
