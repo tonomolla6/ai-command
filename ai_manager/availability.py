@@ -17,7 +17,7 @@ def countdown(reset, reference=None):
     days,seconds=divmod(seconds,86400)
     hours,seconds=divmod(seconds,3600)
     minutes,seconds=divmod(seconds,60)
-    return (f'{days}d ' if days else '')+f'{hours:02d}:{minutes:02d}:{seconds:02d}'
+    return (f'{days}d ' if days else '')+f'{hours:02d}h {minutes:02d}m {seconds:02d}s'
 
 
 def _recovery(windows, queried, reference):
@@ -37,7 +37,8 @@ def _recovery(windows, queried, reference):
         # new allowance. Leave the existing query cadence in charge of refresh.
         if any((at:=instant(w.get('reset_at'))) and queried<at<=reference for w in windows):
             return {'status':'due'}
-        return {'status':'available'}
+        future=[at for w in windows if (at:=instant(w.get('reset_at'))) and at>reference]
+        return dict(status='available',**({'next_reset_at':min(future)} if future else {}))
     reset=max(resets)
     return {'status':'waiting' if reset>reference else 'due','reset_at':reset}
 
@@ -69,11 +70,20 @@ def next_availability(accounts, rows, provider, reference=None):
             result.update(account=account['account'],family=family)
             results.append(result)
     available=[r for r in results if r['status']=='available']
-    if available:return dict(available[0],accounts=[r['account'] for r in available])
     due=[r for r in results if r['status']=='due']
-    if due:return due[0]
     waiting=[r for r in results if r['status']=='waiting']
-    if waiting:
-        result=min(waiting,key=lambda r:(r['reset_at'],str(r['account'])))
-        return dict(result,incomplete=any(r['status']=='unknown' for r in results))
-    return {'status':'unknown'}
+    upcoming=None
+    if due:upcoming=due[0]
+    elif waiting:
+        upcoming=dict(min(waiting,key=lambda r:(r['reset_at'],str(r['account']))),
+                      incomplete=any(r['status']=='unknown' for r in results))
+    if available:
+        result=dict(available[0],accounts=[r['account'] for r in available])
+        if upcoming:result['next']=upcoming
+        else:
+            resets=[r for r in available if r.get('next_reset_at')]
+            if resets:
+                first=min(resets,key=lambda r:(r['next_reset_at'],str(r['account'])))
+                result['next_reset']=dict(first,reset_at=first['next_reset_at'])
+        return result
+    return upcoming or {'status':'unknown'}

@@ -122,14 +122,14 @@ class MonitoringTests(unittest.TestCase):
             self.assertEqual(termios.tcgetattr(self.slave),self.original_termios)
         finally:unrelated.terminate();unrelated.wait()
 
-    def test_compact_countdown_ticks_without_extra_probes_or_claiming_available(self):
+    def assert_countdown_ticks(self,has_available_account=False):
         accounts=self.manager.accounts('codex')
         reference=dt.datetime.now(dt.timezone.utc)
         reset=(reference+dt.timedelta(minutes=2)).isoformat()
         self.manager.save_limits({self.manager.key(a):{'provider':'codex','account':a['account'],
              'email':a['email'],'email_verified':True,'status':'OK',
              'queried_at':(reference-dt.timedelta(seconds=5)).isoformat(),
-             'windows':[{'name':'codex/weekly','available_percent':0,'reset_at':reset}]}
+             'windows':[{'name':'codex/weekly','available_percent':80 if has_available_account and a==accounts[0] else 0,'reset_at':reset}]}
              for a in accounts})
         self.start('countdown')
         def remaining():
@@ -138,12 +138,18 @@ class MonitoringTests(unittest.TestCase):
         self.pump(lambda:remaining() is not None and (self.manager.state/'child.pid').exists())
         initial=remaining()
         self.pump(lambda:remaining() is not None and remaining()<initial,timeout=4)
-        self.assertIn('Próx. conocido: x1',self.screen.text())
+        self.assertIn('Próx. x2:' if has_available_account else 'Próx. conocido: x1',self.screen.text())
         self.assertIn('user3@example.invalid',self.screen.text())
-        self.assertNotIn('Con cuota:',self.screen.text())
+        self.assertEqual('Con cuota:' in self.screen.text(),has_available_account)
         self.assertEqual((self.manager.state/'events.txt').read_text().count('start '),1)
         os.write(self.master,b'q');self.proc.wait(timeout=3)
         self.assertEqual(termios.tcgetattr(self.slave),self.original_termios)
+
+    def test_compact_countdown_ticks_without_extra_probes_or_claiming_available(self):
+        self.assert_countdown_ticks()
+
+    def test_compact_recovery_countdown_also_ticks_when_another_account_has_quota(self):
+        self.assert_countdown_ticks(has_available_account=True)
 
     def test_periodic_and_manual_refresh_are_silent_and_never_overlap(self):
         self.start('periodic')

@@ -207,7 +207,16 @@ def availability_lines(accounts,rows,provider,reset,reference):
     alias=lambda number:prefix+str(number) if provider in ('codex','claude') else prefix
     if result['status']=='available':
         names=', '.join(dict.fromkeys(alias(n) for n in result['accounts']))
-        return [colored('Con cuota: '+names,'ok')]
+        lines=[colored('Con cuota: '+names,'ok')]
+        upcoming=result.get('next') or result.get('next_reset')
+        if upcoming:
+            who=alias(upcoming['account'])
+            if upcoming['status']=='due':lines.append(colored(who+': reset alcanzado · consultar','low'))
+            else:
+                label='Próx. ' if result.get('next') else 'Reset '
+                lines.append(colored(label+who+': ~'+countdown(upcoming['reset_at'],reference),
+                                     'low' if result.get('next') else 'muted'))
+        return lines
     if result['status']=='waiting':
         return [colored('Próx. conocido: '+alias(result['account']),'low'),
                 colored('~'+countdown(result['reset_at'],reference)+' · '+
