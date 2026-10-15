@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Los lanzadores toleran hasta cinco segundos de desaparición temporal del ejecutable durante la sustitución de un paquete nativo. Las pruebas con alias instalados y PTY verifican sesiones nuevas y resume de Claude entre perfiles, conservando cuenta, permisos, transcript y credenciales, sin ejecutar recursivamente el wrapper ni añadir espera al inicio habitual.
 - Las cabeceras conservan el próximo retorno de Codex, Claude y AGY aunque otra cuenta ya tenga cuota; si todas tienen cuota muestran el próximo reset publicado. El contador expresa días, horas, minutos y segundos, sin aumentar la frecuencia de consultas ni inferir resets de OpenCode.
 - La vista compacta añade barras de disponibilidad de 3–6 celdas por ventana, adaptadas al ancho de las columnas. Mantiene porcentajes exactos y el rojo de ventanas bloqueadas; aprovecha el espacio de las fechas para conservar cuatro cuentas sin filas adicionales en una terminal de 120 × 24.
 - `ai usage` y `ai limits` usan bloques compactos por proveedor para mostrar más cuentas sin scroll. Conservan correos, ventanas, resets, créditos, colores y fecha de consulta; `--detailed` recupera las tarjetas completas y el catálogo. El monitor usa el mismo formato y conserva su actualización en segundo plano.

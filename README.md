@@ -115,6 +115,11 @@ nativos y el directorio se conservan. `--version`, login y otros comandos
 administrativos mantienen su comportamiento habitual.
 
 También se crean `claude2`, `codex2` y sus variantes terminadas en `r`.
+`claude2 --resume ID` mantiene la cuenta 2 y puede leer el transcript original
+de otra cuenta sin copiar credenciales. Si una actualización mueve temporalmente
+el paquete y deja roto el enlace al ejecutable, el gestor espera hasta cinco
+segundos a que reaparezca. Los inicios habituales no esperan; si la instalación
+sigue incompleta, muestra un error y permite repetir el mismo comando.
 
 La selección automática exige identidad correcta y ventanas conocidas con margen.
 Primero usa las cuentas con prioridad normal; recurre a las de prioridad baja
