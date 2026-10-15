@@ -147,7 +147,7 @@ ai usage                    # consulta en paralelo; caché de 120 segundos
 ai usage --refresh          # consulta fresca de todas las cuentas activas
 ai usage --cached           # sólo caché local
 ai usage --json             # datos estructurados para tus scripts
-ai usage --detailed         # tarjetas completas, barras y catálogo
+ai usage --detailed         # tarjetas completas, barras grandes y catálogo
 ai usage --monitoring       # panel vivo; actualiza cuotas cada cinco minutos
 ai usage codex --monitoring # el mismo panel, sólo para Codex
 ai usage codex              # sólo Codex; también claude, agy u opencode
@@ -156,9 +156,12 @@ ai usage --layout stacked   # tarjetas verticales para terminales estrechas
 ```
 
 La vista compacta es la predeterminada: agrupa las cuentas de cada proveedor
-en un bloque, con correo, porcentajes, fechas de reset, créditos y última
-consulta. Codex y Claude mantienen sus columnas; AGY y OpenCode comparten la
-tercera. Cuatro cuentas por proveedor caben en una terminal de 120 × 24 en el
+en un bloque, con correo, barras pequeñas junto a cada porcentaje, fechas de
+reset, créditos y última consulta. Las barras ajustan su ancho a la terminal;
+verde indica cuota disponible, amarillo cuota baja y rojo una ventana agotada
+o bloqueada. Los datos desconocidos conservan `UNKNOWN`. Codex y Claude mantienen
+sus columnas; AGY y OpenCode comparten la tercera. Cuatro cuentas por proveedor
+caben en una terminal de 120 × 24 en el
 caso habitual. `--detailed` conserva las tarjetas completas y el catálogo.
 `R` indica resets manuales, `!` una ventana bloqueada y `[M]` una cuenta manual;
 la zona horaria aparece al pie. Las referencias de tokens de OpenCode siguen
