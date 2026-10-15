@@ -101,7 +101,8 @@ def compact_account(account,row,width,reference,age):
         extras.append('Cr '+value)
     resets=row.get('reset_credits_available')
     if provider=='codex' or type(resets) is int and resets>=0:
-        extras.append('R '+(str(resets) if type(resets) is int and resets>=0 else '—' if row.get('status')=='OK' else '?'))
+        extras.append('R '+(str(resets) if type(resets) is int and resets>=0 else
+                            '—' if resets is None and row.get('status')=='OK' else '?'))
     activity=row.get('activity')
     if activity:extras.append('429: '+str(activity.get('errors_429',0)))
     queried=instant(row.get('queried_at'))

@@ -5,6 +5,7 @@ from unittest.mock import patch
 
 from ai_manager.cli import parser
 from ai_manager.ui import usage_lines, visible_width
+from ai_manager.compact_usage import compact_account
 
 
 NOW=dt.datetime(2026,10,15,10,tzinfo=dt.timezone.utc)
@@ -90,3 +91,18 @@ class CompactUsageTests(unittest.TestCase):
         self.assertTrue(parser().parse_args(['usage','--detailed']).detailed)
         self.assertTrue(parser().parse_args(['usage','claude','--monitoring','--detailed']).detailed)
         self.assertTrue(parser().parse_args(['limits','--detailed']).detailed)
+
+    def test_compact_reset_balances_distinguish_zero_unpublished_and_invalid_data(self):
+        a,r=fixtures();a,r=a[0],r[0]
+        for value,expected in ((0,'R 0'),(1,'R 1'),(None,'R —'),(True,'R ?'),(-1,'R ?')):
+            with self.subTest(value=value),patch.dict(os.environ,{'AI_MANAGER_COLOR':'never'}):
+                text='\n'.join(compact_account(a,dict(r,reset_credits_available=value),80,NOW,lambda r:0))
+            self.assertIn(expected,text)
+
+    def test_fixed_models_only_say_manual_when_the_account_is_reserved(self):
+        a,r=fixtures();a,r=a[0],r[0]
+        for automatic in (False,True):
+            with patch.dict(os.environ,{'AI_MANAGER_COLOR':'never'}):
+                text='\n'.join(compact_account(dict(a,automatic=automatic,fixed_model='example-model'),r,80,NOW,lambda r:0))
+            self.assertEqual('[M]' in text,not automatic)
+            self.assertEqual('manual' in text,not automatic)
