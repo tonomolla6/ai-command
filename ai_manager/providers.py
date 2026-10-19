@@ -609,4 +609,7 @@ def query_limits(manager, account):
     except (ManagerError, OSError, ValueError, subprocess.SubprocessError) as exc:
         # Only our fixed diagnostic messages; never persist raw exception/server output.
         entry["reason"] = str(exc) if isinstance(exc, ManagerError) else type(exc).__name__
+    if account['provider']=='claude':
+        from .claude_live import merge_entry
+        return merge_entry(manager,account,entry)
     return entry

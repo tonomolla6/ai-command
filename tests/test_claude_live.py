@@ -6,6 +6,9 @@ import os
 from pathlib import Path
 import tempfile
 import unittest
+import subprocess
+import sys
+import shlex
 from unittest.mock import patch
 
 from ai_manager.core import Manager, read_json, write_json
@@ -24,10 +27,11 @@ class LiveUsageTests(unittest.TestCase):
         write_json(profile/'.claude.json',{'oauthAccount':{'emailAddress':self.account['email']}})
         self.m.config={'schema':1,'accounts':[self.account]};write_json(self.m.config_path,self.m.config)
         self.at=dt.datetime.now(dt.timezone.utc)
-        self.payload={'session_id':'example-session','cost':{'total_api_duration_ms':0}}
+        self.payload={'session_id':'example-session','cost':{'total_api_duration_ms':0},'prompt_cache':{'requests':0}}
 
     def response(self,api_ms=1000,used=96):
         payload=copy.deepcopy(self.payload);payload['cost']['total_api_duration_ms']=api_ms
+        payload['prompt_cache']['requests']=api_ms//1000
         payload['rate_limits']={
             'five_hour':{'used_percentage':used,'resets_at':(self.at+dt.timedelta(hours=2)).timestamp()},
             'seven_day':{'used_percentage':13,'resets_at':(self.at+dt.timedelta(days=3)).timestamp()}}
@@ -55,6 +59,12 @@ class LiveUsageTests(unittest.TestCase):
         self.assertEqual(row['queried_at'],self.at.isoformat())
         self.assertEqual(merge_entry(self.m,self.account,{},self.at+dt.timedelta(seconds=120)),{})
 
+    def test_inflight_time_or_redraw_with_same_request_counter_is_not_a_new_reading(self):
+        self.baseline();observe(self.m,self.account,self.response(),'one-process',self.at)
+        payload=self.response();payload['cost']['total_api_duration_ms']=9000
+        self.assertFalse(observe(self.m,self.account,payload,'one-process',self.at+dt.timedelta(seconds=119)))
+        self.assertEqual(merge_entry(self.m,self.account,{},self.at+dt.timedelta(seconds=120)),{})
+
     def test_old_session_first_render_and_process_restart_need_a_new_response(self):
         self.assertFalse(observe(self.m,self.account,self.response(),'old-process',self.at))
         self.assertNotIn('claude:2',self.m.cache()['accounts'])
@@ -66,6 +76,8 @@ class LiveUsageTests(unittest.TestCase):
         for change in ({'email':'different@example.invalid'},{'account':'9'},{'enabled':False}):
             self.assertEqual(merge_entry(self.m,dict(self.account,**change),{},self.at),{})
         self.assertEqual(merge_entry(self.m,self.account,{'status':'SIN LOGIN'},self.at),{'status':'SIN LOGIN'})
+        rejected={'status':'UNKNOWN','email_verified':False,'reason':'Identity mismatch'}
+        self.assertEqual(merge_entry(self.m,self.account,rejected,self.at),rejected)
         Path(self.account['home'],'.credentials.json').unlink()
         self.assertEqual(merge_entry(self.m,self.account,{},self.at),{})
 
@@ -112,6 +124,51 @@ class LiveUsageTests(unittest.TestCase):
         self.assertTrue(list((self.home/'.ai-manager/backups').glob('*/profile/settings.json')))
         before=settings.read_bytes();configure(self.m,True);self.assertEqual(settings.read_bytes(),before)
         configure(self.m,False);self.assertEqual(read_json(settings),original)
+
+    def test_real_helper_preserves_custom_output_and_stdin_without_logging_payload(self):
+        settings=Path(self.account['home'])/'settings.json'
+        original=shlex.join([sys.executable,'-c',
+            'import json,sys;d=json.load(sys.stdin);print("ORIGINAL:"+str(d["cost"]["total_api_duration_ms"]))'])
+        write_json(settings,{'statusLine':{'type':'command','command':original}})
+        configure(self.m,True)
+        command=shlex.split(read_json(settings)['statusLine']['command'])
+        env={**os.environ,'HOME':str(self.home),'CLAUDE_CONFIG_DIR':self.account['home'],
+             'AI_MANAGER_CLAUDE_RUN':'fixture-native-process'}
+        for payload in (self.payload,self.response()):
+            result=subprocess.run(command,input=json.dumps(payload),text=True,capture_output=True,env=env,timeout=5)
+            self.assertEqual(result.returncode,0);self.assertEqual(result.stderr,'')
+            self.assertEqual(result.stdout,'ORIGINAL:'+str(payload['cost']['total_api_duration_ms'])+'\n')
+        self.assertEqual(self.m.cache()['accounts']['claude:2']['available_percent'],4)
+        self.assertEqual((self.m.state/'claude-live.json').stat().st_mode&0o777,0o600)
+
+    def test_reconfiguration_after_interpreter_change_does_not_chain_the_helper_to_itself(self):
+        configure(self.m,True)
+        with patch('ai_manager.claude_live.sys.executable','/new/python'):
+            configure(self.m,True)
+        configure(self.m,False)
+        self.assertNotIn('statusLine',read_json(Path(self.account['home'])/'settings.json'))
+
+    def test_concurrent_native_probe_failure_uses_live_quota_after_official_identity_check(self):
+        from ai_manager.providers import query_limits
+        from ai_manager.core import ManagerError
+        self.baseline();observe(self.m,self.account,self.response(),'one-process',self.at)
+        with patch('ai_manager.providers.executable',return_value='/fixture/claude'), \
+             patch('ai_manager.providers.subprocess.run') as run, \
+             patch('ai_manager.claude_setup.repair_onboarding'), \
+             patch('ai_manager.providers.claude_usage',side_effect=ManagerError('Provider returned stale usage')):
+            run.return_value.returncode=0
+            run.return_value.stdout=json.dumps({'loggedIn':True,'email':self.account['email']})
+            result=query_limits(self.m,self.account)
+        self.assertEqual(result['status'],'OK');self.assertEqual(result['available_percent'],4)
+        self.assertEqual(result['queried_at'],self.at.isoformat())
+
+    def test_auto_refresh_does_not_make_an_old_statusline_observation_young_again(self):
+        from ai_manager.automatic import refresh_accounts
+        self.baseline();observe(self.m,self.account,self.response(),'one-process',self.at)
+        row=self.m.cache()['accounts']['claude:2']
+        with patch('ai_manager.automatic.collect_limits',return_value={'claude:2':row}):
+            result=refresh_accounts(self.m,'claude',force=True)
+        self.assertEqual(result['claude:2']['queried_at'],self.at.isoformat())
 
 
 if __name__=='__main__':unittest.main()

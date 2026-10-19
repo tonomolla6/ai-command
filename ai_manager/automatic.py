@@ -147,7 +147,7 @@ def refresh_accounts(manager, provider, force=False, notify=None, recheck_unavai
             # if a concurrent probe returns identical quota within one second.
             checked_at = dt.datetime.now(dt.timezone.utc).isoformat()
             for key, entry in entries.items():
-                entry['queried_at'] = checked_at
+                if entry.get('source_type')!='claude_statusline':entry['queried_at'] = checked_at
                 if entry['status'] == 'UNKNOWN' and previous.get(key, {}).get('windows'):
                     old = previous[key]
                     entry['previous_success'] = {'queried_at': old.get('queried_at'), 'windows': old['windows']}
