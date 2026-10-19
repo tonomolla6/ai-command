@@ -108,13 +108,20 @@ def merge_entry(manager,account,entry,reference=None,observations=None):
     windows=[dict(window) for window in windows]
     recent=queried and 0<=(reference-queried).total_seconds()<TTL
     if entry.get('status')=='OK' and recent:
-        windows.extend(dict(w) for w in entry.get('windows',[]) if w.get('name') not in {v['name'] for v in windows})
+        for window in entry.get('windows',[]):
+            if window.get('name') in {v['name'] for v in windows}:continue
+            stamp=_instant(window.get('observed_at')) or (queried if entry.get('source_type')!='claude_statusline' else None)
+            if stamp and 0<=(reference-stamp).total_seconds()<TTL:
+                windows.append(dict(window,observed_at=stamp.isoformat()))
     if any(not _number(w.get('available_percent')) for w in windows):return entry
+    credit_stamp=_instant(entry.get('credits_observed_at')) or (queried if entry.get('source_type')!='claude_statusline' else None)
+    credits_current=credit_stamp and 0<=(reference-credit_stamp).total_seconds()<TTL
     result={k:live[k] for k in ('provider','account','email','email_verified','observed_at')}
     result.update(status='OK',windows=windows,available_percent=min(w['available_percent'] for w in windows),
                   queried_at=observed.isoformat(),last_success_at=observed.isoformat(),
                   source_type='claude_statusline',source='claude statusline (respuestas normales, sin consultas)',
-                  credits=entry.get('credits') if recent else None)
+                  credits=entry.get('credits') if credits_current else None)
+    if credits_current and entry.get('credits') is not None:result['credits_observed_at']=credit_stamp.isoformat()
     if queried and queried>observed:result['last_attempt_at']=queried.isoformat()
     return result
 

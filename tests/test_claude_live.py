@@ -113,6 +113,20 @@ class LiveUsageTests(unittest.TestCase):
              'windows':[{'name':'Fable','available_percent':0}],'credits':{'enabled':False}}
         self.assertEqual(merge_entry(self.m,self.account,row,self.at+dt.timedelta(seconds=1)),row)
 
+    def test_new_responses_do_not_rejuvenate_older_scoped_windows_or_credits(self):
+        self.baseline();observe(self.m,self.account,self.response(),'one-process',self.at)
+        earlier=self.at-dt.timedelta(seconds=110)
+        row={'status':'OK','queried_at':earlier.isoformat(),
+             'windows':[{'name':'Fable','available_percent':50}], 'credits':{'enabled':False}}
+        merged=merge_entry(self.m,self.account,row,self.at)
+        self.assertEqual(len(merged['windows']),3)
+        self.assertEqual(merged['credits_observed_at'],earlier.isoformat())
+        later=self.at+dt.timedelta(seconds=20)
+        observe(self.m,self.account,self.response(2000),'one-process',later)
+        result=merge_entry(self.m,self.account,merged,later)
+        self.assertEqual(len(result['windows']),2)
+        self.assertIsNone(result['credits'])
+
     def test_configuration_preserves_settings_credentials_and_original_statusline_with_backup(self):
         profile=Path(self.account['home']);settings=profile/'settings.json'
         original={'permissions':{'defaultMode':'auto'},'statusLine':{'type':'command','command':'printf existing','padding':2}}
