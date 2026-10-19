@@ -14,7 +14,7 @@ import io
 from unittest.mock import patch
 
 from ai_manager.core import Manager, read_json, write_json
-from ai_manager.claude_live import configure, observe, merge_entry
+from ai_manager.claude_live import configure, observe, merge_entry, _instance
 
 
 class LiveUsageTests(unittest.TestCase):
@@ -181,6 +181,19 @@ class LiveUsageTests(unittest.TestCase):
             self.assertEqual(main(['configure','--claude-live-usage','on']),0)
         self.assertTrue(read_json(self.m.state/'claude-live-settings.json')['enabled'])
         self.assertEqual(self.m.config_path.read_bytes(),before)
+
+    def test_native_ancestor_detection_supports_npm_exe_deleted_inodes_and_official_version_paths(self):
+        proc=self.home/'proc';proc.mkdir()
+        for pid,parent,exe,start in [(101,202,'/bin/sh','111'),(202,1,'/package/claude.exe (deleted)','222')]:
+            path=proc/str(pid);path.mkdir()
+            (path/'stat').write_text(str(pid)+' (fixture) '+' '.join(['S',str(parent),*['0']*17,start]))
+            (path/'comm').write_text('claude\n');(path/'exe').symlink_to(exe)
+        with patch.dict(os.environ,{},clear=True):
+            for name in ('claude.exe (deleted)','claude','2.1.303'):
+                (proc/'202/exe').unlink();(proc/'202/exe').symlink_to('/native/'+name)
+                self.assertEqual(_instance(proc,101),'202:222')
+            (proc/'202/exe').unlink();(proc/'202/exe').symlink_to('/usr/bin/python3.12')
+            self.assertIsNone(_instance(proc,101))
 
 
 if __name__=='__main__':unittest.main()

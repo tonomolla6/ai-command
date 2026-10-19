@@ -10,6 +10,7 @@ import json
 import math
 import os
 from pathlib import Path
+import re
 import shlex
 import subprocess
 import sys
@@ -136,7 +137,7 @@ def configure(manager,enabled):
         registry=read_json(registry_path,{'bindings':{}})
         bindings=registry.setdefault('bindings',{})
         helper=manager.state/'claude-live-statusline.py'
-        command=shlex.join([sys.executable,str(helper)])
+        command=shlex.join([sys.executable,str(helper),'--observe-v1'])
         changes=[]
         for account in manager.accounts('claude'):
             path=Path(account['home'])/'settings.json'
@@ -188,14 +189,18 @@ def ensure_account(manager,account):
         configure(manager,True)
 
 
-def _instance():
+def _instance(proc=None,parent=None):
     """Native ancestor identity is stable across the statusline's short shells."""
     if os.environ.get('AI_MANAGER_CLAUDE_RUN'):return os.environ['AI_MANAGER_CLAUDE_RUN']
-    pid=os.getppid()
+    proc=Path('/proc') if proc is None else Path(proc)
+    pid=os.getppid() if parent is None else parent
     for _ in range(8):
         try:
-            root=Path('/proc')/str(pid);fields=(root/'stat').read_text().rsplit(')',1)[1].split()
-            if Path(os.readlink(root/'exe').removesuffix(' (deleted)')).name=='claude':return str(pid)+':'+fields[19]
+            root=proc/str(pid);fields=(root/'stat').read_text().rsplit(')',1)[1].split()
+            name=Path(os.readlink(root/'exe').removesuffix(' (deleted)')).name
+            native=name in ('claude','claude.exe') or (re.fullmatch(r'\d+\.\d+\.\d+',name) and
+                                                       (root/'comm').read_text().strip() in ('claude','claude.exe'))
+            if native:return str(pid)+':'+fields[19]
             pid=int(fields[1])
         except (OSError,ValueError,IndexError):break
     return None
