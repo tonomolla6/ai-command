@@ -99,7 +99,7 @@ def merge_entry(manager,account,entry,reference=None,observations=None):
     if (not observed or not 0<=(reference-observed).total_seconds()<TTL or
             str(live.get('account'))!=str(account['account']) or live.get('provider')!='claude' or
             live.get('email')!=account.get('email') or live.get('email_verified') is not True):return entry
-    if entry.get('status')=='OK' and queried and queried>=observed:return entry
+    if entry.get('status')=='OK' and entry.get('source_type')!='claude_statusline' and queried and queried>=observed:return entry
     windows=live.get('windows',[])
     if len(windows)!=2:return entry
     for window in windows:
@@ -122,7 +122,8 @@ def merge_entry(manager,account,entry,reference=None,observations=None):
                   source_type='claude_statusline',source='claude statusline (respuestas normales, sin consultas)',
                   credits=entry.get('credits') if credits_current else None)
     if credits_current and entry.get('credits') is not None:result['credits_observed_at']=credit_stamp.isoformat()
-    if queried and queried>observed:result['last_attempt_at']=queried.isoformat()
+    attempts=[at for at in (queried,_instant(entry.get('last_attempt_at'))) if at and at>observed]
+    if attempts:result['last_attempt_at']=max(attempts).isoformat()
     return result
 
 
