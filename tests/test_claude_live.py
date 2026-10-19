@@ -67,6 +67,14 @@ class LiveUsageTests(unittest.TestCase):
         self.assertFalse(observe(self.m,self.account,payload,'one-process',self.at+dt.timedelta(seconds=119)))
         self.assertEqual(merge_entry(self.m,self.account,{},self.at+dt.timedelta(seconds=120)),{})
 
+    def test_quota_exhaustion_is_captured_even_when_a_rejected_request_did_not_increment_counters(self):
+        self.baseline();observe(self.m,self.account,self.response(),'one-process',self.at)
+        later=self.at+dt.timedelta(seconds=1)
+        self.assertTrue(observe(self.m,self.account,self.response(used=100),'one-process',later))
+        row=merge_entry(self.m,self.account,{},later)
+        self.assertEqual(row['available_percent'],0)
+        self.assertFalse(observe(self.m,self.account,self.response(used=100),'one-process',later+dt.timedelta(seconds=1)))
+
     def test_old_session_first_render_and_process_restart_need_a_new_response(self):
         self.assertFalse(observe(self.m,self.account,self.response(),'old-process',self.at))
         self.assertNotIn('claude:2',self.m.cache()['accounts'])

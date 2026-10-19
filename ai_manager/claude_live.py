@@ -58,12 +58,6 @@ def observe(manager,account,payload,instance,reference=None):
     with manager.lock('claude-live',timeout=.5):
         state=read_json(manager.state/'claude-live.json',{'schema':1,'accounts':{},'sessions':{}})
         sessions=state.setdefault('sessions',{});previous=sessions.get(session_key)
-        # A permission toggle, timer, resume or settings reload is not a reply.
-        if previous and (api_ms==previous.get('api_ms') or
-                         requests is not None and requests==previous.get('requests')):return False
-        sessions[session_key]={'api_ms':api_ms,'requests':requests,'seen_at':reference.isoformat()}
-        if len(sessions)>256:
-            state['sessions']=dict(sorted(sessions.items(),key=lambda pair:pair[1]['seen_at'])[-256:])
         windows=[];rates=payload.get('rate_limits') or {}
         if isinstance(rates,dict):
             for field,label,minutes in [('five_hour','Current session',300),('seven_day','Current week (all models)',10080)]:
@@ -78,9 +72,21 @@ def observe(manager,account,payload,instance,reference=None):
                                 'window_minutes':minutes,'reset_at':date.isoformat()})
         # Both general windows are needed: a positive 5h allowance alone says
         # nothing about a potentially exhausted overall weekly allowance.
-        updated=bool(previous and api_ms>previous.get('api_ms',api_ms) and len(windows)==2)
+        signature=hashlib.sha256(json.dumps(windows,sort_keys=True).encode()).hexdigest() if len(windows)==2 else None
+        advanced=bool(previous and api_ms>previous.get('api_ms',api_ms))
         if previous and requests is not None and previous.get('requests') is not None:
-            updated=updated and requests>previous['requests']
+            advanced=advanced and requests>previous['requests']
+        # A rejected request can publish exhausted quota without increasing
+        # successful-request counters. Changed official rows are still evidence;
+        # an unchanged timer/render is not. Old receiver state first baselines.
+        changed=bool(previous and 'quota_signature' in previous and signature is not None and
+                     signature!=previous['quota_signature'])
+        if previous and not advanced and not changed and previous.get('quota_signature')==signature and 'quota_signature' in previous:
+            return False
+        sessions[session_key]={'api_ms':api_ms,'requests':requests,'quota_signature':signature,'seen_at':reference.isoformat()}
+        if len(sessions)>256:
+            state['sessions']=dict(sorted(sessions.items(),key=lambda pair:pair[1]['seen_at'])[-256:])
+        updated=bool(previous and len(windows)==2 and (advanced or changed))
         if updated:
             state.setdefault('accounts',{})[key]={
                 'provider':'claude','account':account['account'],'email':account['email'],
