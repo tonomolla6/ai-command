@@ -102,6 +102,20 @@ def snapshot(manager,provider):
     return accounts,rows
 
 
+def _cache_identity(manager):
+    try:
+        info=(manager.state/'limits.json').stat()
+        return info.st_ino,info.st_mtime_ns,info.st_size
+    except OSError:return None
+
+
+def _refresh_message(rows):
+    stamp=dt.datetime.now().astimezone().strftime('%H:%M:%S %Z')
+    unknown=sum(row.get('status')!='OK' for row in rows)
+    if unknown:return f'Consulta completada {stamp} · {unknown} sin confirmar'
+    return 'Actualizado '+stamp
+
+
 def _draw_line(screen,y,text,width,pairs):
     text=fit(text,max(1,width-1));x=0;attr=0;last=0
     for match in list(ANSI.finditer(text))+[None]:
@@ -141,6 +155,7 @@ def monitor(manager,args,probe_factory=Probe):
         curses.mouseinterval(0)
         probe=None;next_query=time.monotonic();offset=0;last_render=None
         message='Datos de caché · consulta inicial pendiente'
+        cache_identity=_cache_identity(manager);next_cache_check=0
         accounts,rows=snapshot(manager,getattr(args,'provider',None))
         try:
             while True:
@@ -150,10 +165,19 @@ def monitor(manager,args,probe_factory=Probe):
                     if code is not None:
                         probe.close();probe=None
                         manager_now=Manager(manager.home)
+                        cache_identity=_cache_identity(manager)
                         accounts,rows=snapshot(manager_now,getattr(args,'provider',None))
-                        message=('Actualizado '+dt.datetime.now().astimezone().strftime('%H:%M:%S %Z') if code==0 else
+                        message=(_refresh_message(rows) if code==0 else
                                  'Consulta fallida · datos de caché; se reintentará')
                         last_render=None
+                # A separate ai usage/launch can refresh the shared cache.
+                # Notice its atomic replacement without another provider read.
+                if stamp>=next_cache_check:
+                    identity=_cache_identity(manager);next_cache_check=stamp+1
+                    if identity!=cache_identity:
+                        manager_now=Manager(manager.home)
+                        accounts,rows=snapshot(manager_now,getattr(args,'provider',None))
+                        cache_identity=identity;message=_refresh_message(rows);last_render=None
                 if probe is None and stamp>=next_query:
                     try:probe=probe_factory(manager,getattr(args,'provider',None))
                     except (OSError,ManagerError):message='No se pudo consultar · datos de caché; se reintentará'
