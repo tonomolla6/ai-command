@@ -1,6 +1,6 @@
 """Repair Claude's authenticated-first-run preference mismatch, never auth/trust.
 
-Verified against the 2.1.284 and 2.1.296 CLIs: onboarding completion and the
+Verified against the 2.1.284, 2.1.296 and 2.1.301 CLIs: onboarding completion and the
 project TrustDialog are separate gates. `auth login` can omit these preferences.
 Only these two non-credential keys are changed after official identity checks.
 """
@@ -14,7 +14,7 @@ from .core import ManagerError, backup_files, write_json
 from .providers import executable, version
 
 
-VERIFIED_VERSIONS = {'2.1.284', '2.1.296'}
+VERIFIED_VERSIONS = {'2.1.284', '2.1.296', '2.1.301'}
 
 
 def repair_onboarding(manager, account, auth=None):

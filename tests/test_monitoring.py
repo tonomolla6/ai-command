@@ -1,8 +1,10 @@
 """Real PTY/process checks: responsive redraw, periodic reads and owned cleanup."""
 import json
+import datetime as dt
 import os
 from pathlib import Path
 import pty
+import re
 import select
 import signal
 import subprocess
@@ -47,7 +49,8 @@ from ai_manager.core import Manager
 import ai_manager.monitoring as m
 mode=sys.argv[2]
 if mode=='periodic':m.INTERVAL=1
-args=parser().parse_args(['usage','codex','--monitoring','--color','always'])
+args=parser().parse_args(['usage','codex','--monitoring','--color','always',
+                          *([] if mode=='countdown' else ['--detailed'])])
 os.environ['AI_MANAGER_COLOR']=args.color
 def probe(manager,provider):
  return m.Probe(manager,provider,command=[sys.executable,'-c',sys.argv[3],mode])
@@ -118,6 +121,35 @@ class MonitoringTests(unittest.TestCase):
             self.assertIsNone(unrelated.poll())
             self.assertEqual(termios.tcgetattr(self.slave),self.original_termios)
         finally:unrelated.terminate();unrelated.wait()
+
+    def assert_countdown_ticks(self,has_available_account=False):
+        accounts=self.manager.accounts('codex')
+        reference=dt.datetime.now(dt.timezone.utc)
+        reset=(reference+dt.timedelta(minutes=2)).isoformat()
+        self.manager.save_limits({self.manager.key(a):{'provider':'codex','account':a['account'],
+             'email':a['email'],'email_verified':True,'status':'OK',
+             'queried_at':(reference-dt.timedelta(seconds=5)).isoformat(),
+             'windows':[{'name':'codex/weekly','available_percent':80 if has_available_account and a==accounts[0] else 0,'reset_at':reset}]}
+             for a in accounts})
+        self.start('countdown')
+        def remaining():
+            match=re.search(r'~(\d\d)h (\d\d)m (\d\d)s',self.screen.text())
+            return sum(int(v)*n for v,n in zip(match.groups(),(3600,60,1))) if match else None
+        self.pump(lambda:remaining() is not None and (self.manager.state/'child.pid').exists())
+        initial=remaining()
+        self.pump(lambda:remaining() is not None and remaining()<initial,timeout=4)
+        self.assertIn('Próx. x2:' if has_available_account else 'Próx. conocido: x1',self.screen.text())
+        self.assertIn('user3@example.invalid',self.screen.text())
+        self.assertEqual('Con cuota:' in self.screen.text(),has_available_account)
+        self.assertEqual((self.manager.state/'events.txt').read_text().count('start '),1)
+        os.write(self.master,b'q');self.proc.wait(timeout=3)
+        self.assertEqual(termios.tcgetattr(self.slave),self.original_termios)
+
+    def test_compact_countdown_ticks_without_extra_probes_or_claiming_available(self):
+        self.assert_countdown_ticks()
+
+    def test_compact_recovery_countdown_also_ticks_when_another_account_has_quota(self):
+        self.assert_countdown_ticks(has_available_account=True)
 
     def test_periodic_and_manual_refresh_are_silent_and_never_overlap(self):
         self.start('periodic')

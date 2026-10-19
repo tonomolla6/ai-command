@@ -1,11 +1,13 @@
 """ANSI styling that remains readable without color, in pipes, and in JSON."""
 import os
+import datetime as dt
 import re
 import shutil
 import sys
 import textwrap
 import unicodedata
 from itertools import zip_longest
+from .availability import next_availability, countdown
 
 
 PALETTE={'codex':'36','claude':'35','agy':'34','opencode':'33','ok':'32','low':'33','empty':'31','muted':'90','bold':'1','title':'1;36'}
@@ -199,14 +201,52 @@ def usage_card(account,row,width,reset,age):
     return result
 
 
-def usage_lines(accounts,rows,reset,age,layout='auto'):
+def availability_lines(accounts,rows,provider,reset,reference):
+    result=next_availability(accounts,rows,provider,reference)
+    prefix={'codex':'x','claude':'c','agy':'agy','opencode':'oc'}[provider]
+    alias=lambda number:prefix+str(number) if provider in ('codex','claude') else prefix
+    if result['status']=='available':
+        names=', '.join(dict.fromkeys(alias(n) for n in result['accounts']))
+        lines=[colored('Con cuota: '+names,'ok')]
+        upcoming=result.get('next') or result.get('next_reset')
+        if upcoming:
+            who=alias(upcoming['account'])
+            if upcoming['status']=='due':lines.append(colored(who+': reset alcanzado · consultar','low'))
+            else:
+                label='Próx. ' if result.get('next') else 'Reset '
+                lines.append(colored(label+who+': ~'+countdown(upcoming['reset_at'],reference),
+                                     'low' if result.get('next') else 'muted'))
+        return lines
+    if result['status']=='waiting':
+        return [colored('Próx. conocido: '+alias(result['account']),'low'),
+                colored('~'+countdown(result['reset_at'],reference)+' · '+
+                        reset({'reset_at':result['reset_at'].isoformat()}),'low')]
+    if result['status']=='due':
+        return [colored(alias(result['account'])+': reset alcanzado','low'),
+                colored('Pendiente de consulta oficial','muted')]
+    return [colored('Próxima: UNKNOWN','muted')]
+
+
+def usage_lines(accounts,rows,reset,age,layout='auto',compact=False,reference=None):
+    reference=reference or dt.datetime.now(dt.timezone.utc)
     width=max(40,shutil.get_terminal_size(fallback=(120,24)).columns)
     columns=(layout=='columns' or (layout=='auto' and width>=108)) and len({a['provider'] for a in accounts})>1
     output=[colored('AI USAGE','title')+'  '+colored('disponibilidad · sin turnos al modelo','muted')]
     def group(provider,card_width):
         title={'codex':'OPENAI / CODEX','claude':'ANTHROPIC / CLAUDE','agy':'AGY / ANTIGRAVITY','opencode':'OPENCODE / FREE'}[provider]
         if not any(a['provider']==provider for a in accounts):return []
-        result=[colored(fit(title,card_width),provider),'']
+        if compact and provider=='opencode':title+=' · UNKNOWN'
+        result=[colored(fit(('╭─ ' if compact else '')+title,card_width),provider)]
+        if not (compact and provider=='opencode'):
+            result.extend(fit(line,card_width) for line in availability_lines(accounts,rows,provider,reset,reference))
+        if compact:
+            from .compact_usage import compact_account
+            for account,row in zip(accounts,rows):
+                if account['provider']==provider:
+                    result.extend(compact_account(account,row,card_width,reference,age))
+            result.append(colored('╰'+'─'*(card_width-1),provider))
+            return result
+        result.append('')
         for account,row in zip(accounts,rows):
             if account['provider']==provider:
                 result.extend(usage_card(account,row,card_width,reset,age));result.append('')
@@ -219,9 +259,11 @@ def usage_lines(accounts,rows,reset,age,layout='auto'):
     else:
         for provider in ('codex','claude','agy','opencode'):
             output.extend(group(provider,width))
-    output.append(colored('✓ correo verificado · caché 120s · --refresh actualiza','muted'))
+    footer=(reference.astimezone().strftime('%Z')+' · ✓ correo · ! bloqueado · R resets · ~ estimado · --detailed: ampliar' if compact else
+            '✓ correo verificado · caché 120s · --refresh actualiza')
+    output.append(colored(fit(footer,width).rstrip(),'muted'))
     return output
 
 
-def render_usage(accounts,rows,reset,age,layout='auto'):
-    print('\n'.join(usage_lines(accounts,rows,reset,age,layout)))
+def render_usage(accounts,rows,reset,age,layout='auto',compact=False):
+    print('\n'.join(usage_lines(accounts,rows,reset,age,layout,compact=compact)))

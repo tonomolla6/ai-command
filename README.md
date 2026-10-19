@@ -13,7 +13,7 @@
 Gestor local para **Codex CLI, Claude Code, Antigravity y OpenCode**.
 Credenciales por cuenta, cuotas en paralelo y continuidad en tu directorio de trabajo.
 
-![Panel de uso en tres columnas, con datos ficticios](docs/images/usage.png)
+![Vista detallada en tres columnas, con datos ficticios: ai usage --detailed](docs/images/usage.png)
 
 *Captura del renderizador real con datos ficticios. Las cuotas y créditos dependen de cada proveedor y plan.*
 
@@ -115,6 +115,11 @@ nativos y el directorio se conservan. `--version`, login y otros comandos
 administrativos mantienen su comportamiento habitual.
 
 También se crean `claude2`, `codex2` y sus variantes terminadas en `r`.
+`claude2 --resume ID` mantiene la cuenta 2 y puede leer el transcript original
+de otra cuenta sin copiar credenciales. Si una actualización mueve temporalmente
+el paquete y deja roto el enlace al ejecutable, el gestor espera hasta cinco
+segundos a que reaparezca. Los inicios habituales no esperan; si la instalación
+sigue incompleta, muestra un error y permite repetir el mismo comando.
 
 La selección automática exige identidad correcta y ventanas conocidas con margen.
 Primero usa las cuentas con prioridad normal; recurre a las de prioridad baja
@@ -130,6 +135,12 @@ a la vez, uno consulta y los demás reutilizan el resultado. El mensaje indica
 cuándo está usando caché. Las cuotas desconocidas, agotadas o con identidad no
 verificada siguen excluidas de la selección automática.
 
+Si la caché no permite elegir ninguna cuenta, vuelve a consultar las cuentas
+rechazadas antes de dar el error. Así detecta un reset que hayas hecho manualmente,
+también al reanudar un ID concreto. Cada cuenta se consulta como máximo una vez
+por lanzamiento y los arranques simultáneos comparten esa comprobación. Si las
+cuotas recién consultadas siguen agotadas o desconocidas, termina sin reintentar.
+
 Para comprobar las cuotas ahora, usa `ai usage claude --refresh` antes de reanudar,
 o `ai auto claude --refresh --resume --session ID`. La cuenta elegida confirma
 su identidad de nuevo al ejecutar el CLI.
@@ -141,6 +152,7 @@ ai usage                    # consulta en paralelo; caché de 120 segundos
 ai usage --refresh          # consulta fresca de todas las cuentas activas
 ai usage --cached           # sólo caché local
 ai usage --json             # datos estructurados para tus scripts
+ai usage --detailed         # tarjetas completas, barras grandes y catálogo
 ai usage --monitoring       # panel vivo; actualiza cuotas cada cinco minutos
 ai usage codex --monitoring # el mismo panel, sólo para Codex
 ai usage codex              # sólo Codex; también claude, agy u opencode
@@ -148,23 +160,49 @@ ai usage agy --refresh      # consultar únicamente AGY de nuevo
 ai usage --layout stacked   # tarjetas verticales para terminales estrechas
 ```
 
-Codex, Claude y AGY/OpenCode ocupan tres columnas en terminales anchas. Las tarjetas
-incluyen correo verificado, ventanas publicadas, reset, créditos y fecha de consulta.
-Una ventana semanal general agotada pone las dependientes en rojo y muestra
-`BLOQUEADO`, conservando sus porcentajes originales.
+La vista compacta es la predeterminada: agrupa las cuentas de cada proveedor
+en un bloque, con correo, barras pequeñas junto a cada porcentaje, fechas de
+reset, créditos y última consulta. Las barras ajustan su ancho a la terminal;
+verde indica cuota disponible, amarillo cuota baja y rojo una ventana agotada
+o bloqueada. Los datos desconocidos conservan `UNKNOWN`. Codex y Claude mantienen
+sus columnas; AGY y OpenCode comparten la tercera. Cuatro cuentas por proveedor
+caben en una terminal de 120 × 24 en el
+caso habitual. `--detailed` conserva las tarjetas completas y el catálogo.
+`R` indica resets manuales, `!` una ventana bloqueada y `[M]` una cuenta manual;
+la zona horaria aparece al pie. Las referencias de tokens de OpenCode siguen
+siendo actividad local, no cuota disponible.
+
+La cabecera muestra las cuentas con cuota y la próxima recuperación conocida,
+incluso si quedan otras disponibles: `Próx. c4: ~1d 03h 20m 15s`, por ejemplo.
+Si todas las cuentas verificadas tienen cuota, muestra el próximo reset
+publicado: `Reset x2: ~02h 15m 00s`. Son dos datos distintos: el retorno de una
+cuenta agotada y la renovación de una ventana que todavía tiene cuota.
+Si no queda ninguna disponible, conserva `Próx. conocido: x4` y la fecha.
+Es una estimación según la última consulta oficial: espera al reset más tardío
+de las ventanas agotadas de cada cuenta y después elige la cuenta que se
+recuperaría antes. Excluye cuentas desactivadas, reservadas para selección
+manual y observaciones con identidad o límites desconocidos. AGY calcula cada
+familia independiente; OpenCode conserva `UNKNOWN` si no publica resets.
+Sin fechas publicadas no se inventa una cuenta atrás.
+Al llegar a cero muestra «reset alcanzado», pendiente de una consulta oficial;
+no da por recuperada la cuota ni consume reinicios o créditos.
+
+Una ventana semanal general agotada pone las dependientes en rojo, conservando
+sus porcentajes originales: `!` en compacto o `BLOQUEADO` en modo detallado.
 
 El modo `--monitoring` ocupa la terminal como un monitor de sistema. Mantiene
-las tarjetas con colores y columnas, muestra la cuenta atrás y consulta todas
-las cuentas seleccionadas en paralelo cada cinco minutos. Las consultas se
+los bloques con colores y columnas, y la cuenta atrás baja cada segundo con el
+reloj local, sin consultas adicionales. Consulta todas las cuentas seleccionadas
+en paralelo cada cinco minutos. Las consultas se
 ejecutan en segundo plano mientras el panel está abierto; los datos anteriores
 siguen visibles hasta que termina la consulta, sin generar turnos al modelo.
 Usa `r` para actualizar, `q` o `Ctrl+C` para salir, flechas o rueda para desplazarte
 y `PgUp`/`PgDn` para pasar de página. Conserva la pantalla anterior al salir y
 adapta el panel al cambiar el tamaño de la terminal. Si una consulta sigue activa,
 espera a que termine antes de empezar otra. El modo requiere una terminal
-interactiva y admite el filtro de proveedor, `--layout` y `--color`.
+interactiva y admite el filtro de proveedor, `--layout`, `--color` y `--detailed`.
 
-`Resets: 2 disponibles` muestra los reinicios manuales que publica la cuenta,
+`R 2` (o `Resets: 2 disponibles` en modo detallado) muestra los reinicios manuales que publica la cuenta,
 separados del saldo de créditos y de la fecha del próximo reinicio automático.
 Codex proporciona el contador mediante su
 [protocolo oficial](https://developers.openai.com/codex/app-server/).

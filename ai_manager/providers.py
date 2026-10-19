@@ -23,6 +23,7 @@ from .core import ManagerError, now
 
 
 AUTO_WRAPPER_MARKER = b"# ai-manager provider entrypoint v1"
+EXECUTABLE_RECOVERY_SECONDS = 5
 
 
 def executable(provider):
@@ -31,17 +32,30 @@ def executable(provider):
     # A system installation can keep its original ARM64 binaries next to the
     # package. Each user's HOME/auth remains independent of the global code.
     directories=[str(Path(__file__).resolve().parent.parent/'native'),*os.get_exec_path()]
-    for directory in directories:
-        path = Path(directory or os.curdir).absolute() / provider
-        if not path.is_file() or not os.access(path, os.X_OK):
-            continue
-        try:
-            with path.open('rb') as stream:
-                if AUTO_WRAPPER_MARKER in stream.read(256):
-                    continue
-        except OSError:
-            continue
-        return str(path)
+    paths=list(dict.fromkeys(Path(directory or os.curdir).absolute()/provider for directory in directories))
+    deadline=time.monotonic()+EXECUTABLE_RECOVERY_SECONDS
+    while True:
+        replacing=False
+        for path in paths:
+            if not path.is_file() or not os.access(path, os.X_OK):
+                # npm briefly moves the package directory before installing its
+                # replacement. The retained native symlink survives that gap.
+                replacing|=path.is_symlink() and not path.exists()
+                continue
+            try:
+                with path.open('rb') as stream:
+                    if AUTO_WRAPPER_MARKER in stream.read(256):continue
+            except FileNotFoundError:
+                replacing=True;continue
+            except OSError:
+                continue
+            return str(path)
+        remaining=deadline-time.monotonic()
+        if not replacing:break
+        if remaining<=0:
+            raise ManagerError(f"El ejecutable original de {provider} sigue sin estar disponible tras esperar "
+                               "su posible actualización. Repite el comando al terminar la instalación.")
+        time.sleep(min(.1,remaining))
     raise ManagerError(f"No se encuentra el ejecutable original de {provider} en PATH")
 
 
