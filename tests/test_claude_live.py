@@ -9,6 +9,8 @@ import unittest
 import subprocess
 import sys
 import shlex
+import contextlib
+import io
 from unittest.mock import patch
 
 from ai_manager.core import Manager, read_json, write_json
@@ -169,6 +171,16 @@ class LiveUsageTests(unittest.TestCase):
         with patch('ai_manager.automatic.collect_limits',return_value={'claude:2':row}):
             result=refresh_accounts(self.m,'claude',force=True)
         self.assertEqual(result['claude:2']['queried_at'],self.at.isoformat())
+
+    def test_configure_command_does_not_change_permission_policy(self):
+        from ai_manager.cli import main
+        from ai_manager.migrations import CURRENT
+        self.m.config.update(manager_schema=CURRENT,claude_skip_permissions=True)
+        write_json(self.m.config_path,self.m.config);before=self.m.config_path.read_bytes()
+        with patch.dict(os.environ,{'HOME':str(self.home)}),contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(main(['configure','--claude-live-usage','on']),0)
+        self.assertTrue(read_json(self.m.state/'claude-live-settings.json')['enabled'])
+        self.assertEqual(self.m.config_path.read_bytes(),before)
 
 
 if __name__=='__main__':unittest.main()

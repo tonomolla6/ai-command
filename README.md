@@ -217,6 +217,32 @@ su intervalo habitual; `r` pide una nueva consulta, sin garantizar que el
 proveedor ya permita refrescarla. El coste de una conversación y sus tokens
 no permiten calcular el porcentaje restante de la suscripción.
 
+Para recoger además las cuotas que llegan con tus respuestas normales de Claude:
+
+```bash
+ai configure --claude-live-usage on
+```
+
+Usa el JSON de la [statusline oficial](https://code.claude.com/docs/en/statusline#available-data),
+con backup de settings y conservando la salida de una barra existente. Guarda
+sólo porcentajes, resets y metadatos mínimos fuera del repositorio; no copia
+conversaciones ni credenciales. No genera mensajes, peticiones al modelo ni
+consultas HTTP adicionales. Los perfiles nuevos se preparan al abrirlos.
+
+La primera ejecución de la barra establece una referencia. Una respuesta normal
+posterior publica las ventanas generales de 5h y 7d en la caché común y el monitor
+las recoge sin esperar cinco minutos. El origen se identifica como `sesión @hora`.
+Los redibujados y temporizadores no rejuvenecen la lectura. Tras 120 segundos sin
+datos nuevos o al cruzar un reset, deja de servir como cuota actual para la
+selección automática. Se conservan las consultas oficiales de `/usage` para
+cuentas inactivas, ventanas adicionales y créditos; si fallan y no hay una
+observación reciente fiable, se muestra `UNKNOWN`.
+
+`ai configure --claude-live-usage off` restaura la barra anterior conservando los
+demás ajustes. No modifica los permisos de Claude ni necesita reiniciar agentes;
+Claude recarga sus settings. Un monitor abierto antes de actualizar el gestor sí
+debe cerrarse con `q` y abrirse otra vez.
+
 `R 2` (o `Resets: 2 disponibles` en modo detallado) muestra los reinicios manuales que publica la cuenta,
 separados del saldo de créditos y de la fecha del próximo reinicio automático.
 Codex proporciona el contador mediante su
