@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.6.1 — 2026-10-19
+
+- La reparación opcional del onboarding deja de bloquear logins válidos, sesiones y consultas de uso al cambiar la versión de Claude. Una versión desconocida conserva sus preferencias y continúa con el asistente oficial, sin forzar otro OAuth.
+- Añade la versión verificada Claude Code 2.1.293 a la reparación con backup de las dos preferencias de primer inicio; mantiene los controles de identidad, credenciales y confianza.
+- Las regresiones cubren login existente, OAuth completado, arranque con cuenta aislada y permisos configurados, `/usage`, versiones futuras y conservación de preferencias no verificadas.
+
 ## 1.6.0 — 2026-10-19
 
 - Conserva la reparación del primer inicio autenticado de Claude Code 2.1.284 y 2.1.296 y añade la versión verificada 2.1.301. Sólo modifica las dos preferencias de onboarding con backup; no recupera ni sustituye logins caducados.
