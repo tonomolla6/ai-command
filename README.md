@@ -206,6 +206,16 @@ y `PgUp`/`PgDn` para pasar de página. Conserva la pantalla anterior al salir y
 adapta el panel al cambiar el tamaño de la terminal. Si una consulta sigue activa,
 espera a que termine antes de empezar otra. El modo requiere una terminal
 interactiva y admite el filtro de proveedor, `--layout`, `--color` y `--detailed`.
+También recoge los cambios de caché de otros comandos `ai` sin lanzar otra
+consulta al proveedor. Si hay cuotas sin verificar, la cabecera lo indica.
+
+Claude puede devolver porcentajes antiguos cuando limita las consultas de
+`/usage`, incluso con salida correcta y cero turnos. El gestor rechaza ese
+resultado como cuota actual y muestra `UNKNOWN`, conservando el login. Esos
+porcentajes no participan en la selección automática. El monitor reintenta en
+su intervalo habitual; `r` pide una nueva consulta, sin garantizar que el
+proveedor ya permita refrescarla. El coste de una conversación y sus tokens
+no permiten calcular el porcentaje restante de la suscripción.
 
 `R 2` (o `Resets: 2 disponibles` en modo detallado) muestra los reinicios manuales que publica la cuenta,
 separados del saldo de créditos y de la fecha del próximo reinicio automático.
