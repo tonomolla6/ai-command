@@ -87,6 +87,11 @@ verifica el correo y nunca reasigna silenciosamente una credencial a otra cuenta
 Puedes registrar cualquier número de cuentas. Para conservar un login ya existente,
 usa `ai add codex TU_CORREO --id 1 --home ~/.codex` o su equivalente para Claude.
 
+En Claude, el gestor puede completar dos preferencias de primer inicio tras
+verificar el login, con backup y sólo en versiones comprobadas. Si una actualización
+trae una versión desconocida, conserva las preferencias y deja continuar al
+asistente oficial; el número de versión no obliga a repetir un login válido.
+
 | Acción | Comando |
 |---|---|
 | Menú con fzf o menú estándar | `ai` |

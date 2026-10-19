@@ -4,12 +4,13 @@ import io
 import json
 import os
 from pathlib import Path
+import subprocess
 import tempfile
 import unittest
 from unittest.mock import patch
 
 from ai_manager.claude_setup import repair_onboarding
-from ai_manager.cli import login
+from ai_manager.cli import launch, login
 from ai_manager.core import Manager, ManagerError, read_json, write_json
 from ai_manager.providers import claude_usage, claude_supports_usage, parse_claude_report, parse_claude, query_limits
 
@@ -60,18 +61,27 @@ class AuthenticatedOnboardingTests(unittest.TestCase):
             with self.subTest(overrides=overrides), self.assertRaises(ManagerError):
                 repair_onboarding(self.m, self.account, dict(self.auth, **overrides))
             self.assertEqual(self.prefs.read_bytes(), before)
-        with patch('ai_manager.claude_setup.version', return_value='9.0.0'), self.assertRaises(ManagerError):
-            repair_onboarding(self.m, self.account, self.auth)
+        with patch('ai_manager.claude_setup.version', return_value='9.0.0'):
+            self.assertFalse(repair_onboarding(self.m, self.account, self.auth))
         self.assertEqual(self.prefs.read_bytes(), before)
         self.credential.unlink()
         self.assertFalse(repair_onboarding(self.m, self.account, self.auth))
         self.assertEqual(self.prefs.read_bytes(), before)
 
     def test_current_cli_login_repairs_onboarding_without_reauth_or_trust_changes(self):
+        self.assert_verified_login_repair('2.1.296')
+
+    def test_oracle_cli_login_repairs_onboarding_without_reauth_or_trust_changes(self):
+        self.assert_verified_login_repair('2.1.293')
+
+    def test_verified_301_login_keeps_credentials_and_trust(self):
+        self.assert_verified_login_repair('2.1.301')
+
+    def assert_verified_login_repair(self, version):
         args = argparse.Namespace(provider='claude', account='2', reauth=False)
         before = self.prefs.read_bytes()
         output = io.StringIO()
-        with patch('ai_manager.claude_setup.version', return_value='2.1.296 (Claude Code)'), \
+        with patch('ai_manager.claude_setup.version', return_value=version+' (Claude Code)'), \
              patch('ai_manager.cli.sync_identity', return_value=self.account['email']), \
              patch('ai_manager.claude_setup.executable', return_value='/official/claude'), \
              patch('ai_manager.claude_setup.subprocess.run') as auth_status, \
@@ -83,7 +93,7 @@ class AuthenticatedOnboardingTests(unittest.TestCase):
         oauth.assert_not_called()
         self.assertIn('primer inicio reparado', output.getvalue())
         self.assertEqual(read_json(self.prefs), dict(self.original,
-            hasCompletedOnboarding=True, lastOnboardingVersion='2.1.296'))
+            hasCompletedOnboarding=True, lastOnboardingVersion=version))
         self.assertEqual(self.credential.read_bytes(), self.before)
         backups = list((self.home / '.ai-manager/backups').glob('*/.claude-account-2/.claude.json'))
         self.assertEqual(len(backups), 1)
@@ -91,12 +101,90 @@ class AuthenticatedOnboardingTests(unittest.TestCase):
 
     def test_unverified_patch_version_preserves_preferences_without_backup(self):
         before = self.prefs.read_bytes()
-        with patch('ai_manager.claude_setup.version', return_value='2.1.297 (Claude Code)'), \
-             self.assertRaises(ManagerError):
-            repair_onboarding(self.m, self.account, self.auth)
+        with patch('ai_manager.claude_setup.version', return_value='2.1.297 (Claude Code)'):
+            self.assertFalse(repair_onboarding(self.m, self.account, self.auth))
         self.assertEqual(self.prefs.read_bytes(), before)
         self.assertEqual(self.credential.read_bytes(), self.before)
         self.assertFalse((self.home / '.ai-manager/backups').exists())
+
+    def test_existing_login_survives_unknown_cli_without_oauth_or_preference_changes(self):
+        args = argparse.Namespace(provider='claude', account='2', reauth=False)
+        for version in ('2.1.302', '9.0.0', 'UNKNOWN'):
+            with self.subTest(version=version), \
+                 patch('ai_manager.claude_setup.version', return_value=version), \
+                 patch('ai_manager.cli.sync_identity', return_value=self.account['email']), \
+                 patch('ai_manager.claude_setup.executable', return_value='/official/claude'), \
+                 patch('ai_manager.claude_setup.subprocess.run', return_value=
+                       subprocess.CompletedProcess([], 0, json.dumps(self.auth))), \
+                 patch('ai_manager.cli.subprocess.call') as oauth, \
+                 contextlib.redirect_stdout(io.StringIO()) as output:
+                self.assertEqual(login(self.m, args), 0)
+                oauth.assert_not_called()
+                self.assertIn('login verificado', output.getvalue())
+                self.assertNotIn('reparado', output.getvalue())
+            self.assertEqual(read_json(self.prefs), self.original)
+            self.assertEqual(self.credential.read_bytes(), self.before)
+            self.assertFalse((self.home / '.ai-manager/backups').exists())
+
+    def test_successful_fresh_login_is_not_reported_as_failure_on_unknown_version(self):
+        self.credential.unlink()
+        args = argparse.Namespace(provider='claude', account='2', reauth=False)
+        def authenticate(*args, **kwargs):
+            self.credential.write_bytes(self.before)
+            return 0
+        with patch('ai_manager.claude_setup.version', return_value='9.0.0'), \
+             patch('ai_manager.cli.sync_identity', return_value=self.account['email']), \
+             patch('ai_manager.cli.executable', return_value='/official/claude'), \
+             patch('ai_manager.claude_setup.executable', return_value='/official/claude'), \
+             patch('ai_manager.claude_setup.subprocess.run', return_value=
+                   subprocess.CompletedProcess([], 0, json.dumps(self.auth))), \
+             patch('ai_manager.cli.subprocess.call', side_effect=authenticate) as oauth, \
+             patch('ai_manager.cli.sys.stdin.isatty', return_value=True), \
+             contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(login(self.m, args), 0)
+        self.assertEqual(oauth.call_args.args[0], ['/official/claude', 'auth', 'login', '--claudeai'])
+        self.assertEqual(read_json(self.prefs), self.original)
+        self.assertEqual(self.credential.read_bytes(), self.before)
+
+    def test_unknown_version_launch_reaches_native_cli_with_isolated_account(self):
+        self.m.config['claude_skip_permissions'] = True
+        args = argparse.Namespace(provider='claude', account='2', dry_run=False, extra=[])
+        with contextlib.redirect_stdout(io.StringIO()), \
+             patch('ai_manager.claude_setup.version', return_value='9.0.0'), \
+             patch('ai_manager.cli.sync_identity', return_value=self.account['email']), \
+             patch('ai_manager.cli.handoff_prompt', return_value=None), \
+             patch('ai_manager.cli.executable', return_value='/official/claude'), \
+             patch('ai_manager.claude_setup.executable', return_value='/official/claude'), \
+             patch('ai_manager.claude_setup.subprocess.run', side_effect=[
+                 subprocess.CompletedProcess([], 0, json.dumps(self.auth)),
+                 subprocess.CompletedProcess([], 0)]) as native, \
+             patch('ai_manager.cli.sys.stdin.isatty', return_value=True), \
+             patch('ai_manager.cli.sys.stdout.isatty', return_value=True):
+            self.assertEqual(launch(self.m, args), 0)
+        self.assertEqual(native.call_count, 2)
+        call = native.call_args
+        self.assertEqual(call.args[0][0], '/official/claude')
+        self.assertIn('--dangerously-skip-permissions', call.args[0])
+        self.assertIn('bypassPermissions', call.args[0])
+        self.assertEqual(call.kwargs['env']['CLAUDE_CONFIG_DIR'], self.account['home'])
+        self.assertEqual(call.kwargs['env']['IS_SANDBOX'], '1')
+        self.assertEqual(read_json(self.prefs), self.original)
+        self.assertEqual(self.credential.read_bytes(), self.before)
+
+    def test_unknown_version_does_not_prevent_official_usage(self):
+        data = {'windows': [{'name': 'weekly', 'available_percent': 60}], 'credits': None}
+        with patch('ai_manager.claude_setup.version', return_value='9.0.0'), \
+             patch('ai_manager.providers.executable', return_value='/official/claude'), \
+             patch('ai_manager.providers.subprocess.run', return_value=
+                   subprocess.CompletedProcess([], 0, json.dumps(self.auth))), \
+             patch('ai_manager.providers.claude_usage', return_value=data) as usage:
+            row = query_limits(self.m, self.account)
+        self.assertEqual(row['status'], 'OK')
+        self.assertTrue(row['email_verified'])
+        self.assertEqual(row['windows'][0]['available_percent'], 60)
+        usage.assert_called_once_with(self.m, self.account, details=True)
+        self.assertEqual(read_json(self.prefs), self.original)
+        self.assertEqual(self.credential.read_bytes(), self.before)
 
     def test_corrupt_preferences_and_symlinks_are_preserved(self):
         self.prefs.write_text('{broken')
