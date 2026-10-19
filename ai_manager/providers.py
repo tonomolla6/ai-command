@@ -368,7 +368,22 @@ def parse_claude_report(report):
     rates=report.get('rate_limits') if isinstance(report,dict) else None
     if not isinstance(rates,dict):return None
     windows=[]
-    for limit in rates.get('limits') or []:
+    limits=rates.get('limits')
+    # Older public usage_report schemas expose named utilization windows.
+    # Prefer the newer rows when present, without duplicating their windows.
+    if not isinstance(limits,list):
+        limits=[]
+        for field,kind in [('five_hour','session'),('seven_day','weekly_all'),
+                           ('seven_day_opus','weekly_scoped'),('seven_day_sonnet','weekly_scoped')]:
+            window=rates.get(field)
+            if not isinstance(window,dict):continue
+            limits.append(dict(window,kind=kind,percent=window.get('utilization'),
+                               scope={'model':{'display_name':field.removeprefix('seven_day_').title()}}))
+        for window in rates.get('model_scoped') or []:
+            if isinstance(window,dict):
+                limits.append(dict(window,kind='weekly_scoped',percent=window.get('utilization'),
+                                   scope={'model':{'display_name':window.get('display_name')}}))
+    for limit in limits:
         if not isinstance(limit,dict):continue
         value=available(limit.get('percent'))
         if value is None:continue
@@ -419,6 +434,23 @@ def claude_supports_usage(binary):
         return False
 
 
+def _check_claude_usage_freshness(text,reports=()):
+    # The native TUI warns when a failed/rate-limited read falls back to its
+    # persisted snapshot. Never turn those recognizable bars into fresh quota.
+    if re.search(r'showing\s+last[- ]known\s+usage|could\s+not\s+refresh\s+usage|'
+                 r'usage\s+endpoint\s+is\s+rate\s+limited',text,re.I):
+        raise ManagerError('Claude limita/no completa la consulta; cuota actual UNKNOWN (datos antiguos)')
+    for report in reports:
+        rates=report.get('rate_limits')
+        # 2.1.293 explicitly removes limits from a seeded response, but its
+        # headless text formatter omits the TUI's stale/rate-limited warning.
+        # An explicit null is not permission to reuse the old text percentages.
+        if (isinstance(rates,dict) and 'limits' in rates and rates['limits'] is None
+                and not any(isinstance(rates.get(key),dict) for key in
+                            ('five_hour','seven_day','seven_day_opus','seven_day_sonnet'))):
+            raise ManagerError('Claude: cuotas actuales sin confirmar; devolvió caché')
+
+
 def claude_usage(manager, account, timeout=25, details=False):
     binary=executable('claude')
     if not (re.search(r'\b2\.1\.284\b',version('claude')) or claude_supports_usage(binary)):
@@ -438,6 +470,7 @@ def claude_usage(manager, account, timeout=25, details=False):
     if (result.returncode or not finish or finish.get('subtype')!='success' or finish.get('is_error')
             or finish.get('num_turns')!=0 or finish.get('total_cost_usd')!=0):
         raise ManagerError('Claude /usage no confirmó una consulta local sin turnos; no se reintenta')
+    _check_claude_usage_freshness(finish.get('result',''),reports)
     for report in reversed(reports):
         parsed=parse_claude_report(report)
         if parsed:return parsed if details else parsed['windows']
@@ -475,6 +508,7 @@ def claude_usage_pty(manager, account, timeout=22, details=False):
                 if b"\x1b[6n" in raw[-1000:]: os.write(master, b"\x1b[1;1R")
                 if b"\x1b[c" in raw[-1000:]: os.write(master, b"\x1b[?1;2c")
                 screen.feed(chunk)
+                _check_claude_usage_freshness(screen.text())
                 found = parse_claude(screen.text())
                 if found and found != best:
                     best = found; stable_since = time.monotonic()
