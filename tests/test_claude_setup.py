@@ -149,7 +149,8 @@ class AuthenticatedOnboardingTests(unittest.TestCase):
     def test_unknown_version_launch_reaches_native_cli_with_isolated_account(self):
         self.m.config['claude_skip_permissions'] = True
         args = argparse.Namespace(provider='claude', account='2', dry_run=False, extra=[])
-        with patch('ai_manager.claude_setup.version', return_value='9.0.0'), \
+        with contextlib.redirect_stdout(io.StringIO()), \
+             patch('ai_manager.claude_setup.version', return_value='9.0.0'), \
              patch('ai_manager.cli.sync_identity', return_value=self.account['email']), \
              patch('ai_manager.cli.handoff_prompt', return_value=None), \
              patch('ai_manager.cli.executable', return_value='/official/claude'), \
@@ -158,8 +159,7 @@ class AuthenticatedOnboardingTests(unittest.TestCase):
                  subprocess.CompletedProcess([], 0, json.dumps(self.auth)),
                  subprocess.CompletedProcess([], 0)]) as native, \
              patch('ai_manager.cli.sys.stdin.isatty', return_value=True), \
-             patch('ai_manager.cli.sys.stdout.isatty', return_value=True), \
-             contextlib.redirect_stdout(io.StringIO()):
+             patch('ai_manager.cli.sys.stdout.isatty', return_value=True):
             self.assertEqual(launch(self.m, args), 0)
         self.assertEqual(native.call_count, 2)
         call = native.call_args
