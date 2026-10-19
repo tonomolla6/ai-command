@@ -14,7 +14,7 @@ from .core import ManagerError, backup_files, write_json
 from .providers import executable, version
 
 
-VERIFIED_VERSIONS = {'2.1.284', '2.1.296'}
+VERIFIED_VERSIONS = {'2.1.284', '2.1.296', '2.1.301'}
 
 
 def repair_onboarding(manager, account, auth=None):
