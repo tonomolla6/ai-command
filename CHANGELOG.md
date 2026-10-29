@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.6.3 — 2026-10-29
+
+- Algunas cuentas Claude Max 20x reciben `/usage` sin límites aunque funcionan con normalidad. En ese caso `ai` usa la utilización que Claude Code guarda localmente para la misma cuenta, si tiene menos de seis horas, y descarta las ventanas cuyo reset ya ha pasado. El monitor indica la hora de ese dato (`caché HH:MM`); sin caché reciente la cuenta sigue en `UNKNOWN`. No consulta endpoints privados ni gasta turnos.
+
 ## 1.6.2 — 2026-10-29
 
 - AGY publica la cuota de Gemini 4 Argon como grupo propio, separado del resto de Gemini. `ai usage` la muestra en su bloque con su ventana y reset, y los modelos Argon dejan de listarse bajo la cuota compartida de Gemini. La próxima recuperación considera Argon como una familia independiente.
