@@ -206,7 +206,7 @@ def usage_card(account,row,width,reset,age):
         import datetime as dt
         queried=dt.datetime.fromisoformat(queried).astimezone().strftime('%d/%m %H:%M:%S %Z')
     except (TypeError,ValueError):pass
-    body.append(colored('Consulta: '+queried,'muted'))
+    body.append(colored(('Observado en sesión: ' if row.get('source_type')=='claude_statusline' else 'Consulta: ')+queried,'muted'))
     if elapsed is not None and elapsed>=120:body.append(colored(f'STALE · hace {elapsed}s; usa --refresh','low'))
     if row.get('reason') and row['reason']!='SIN LOGIN':
         body.extend(colored(line,'low') for line in textwrap.wrap(row['reason'],width=inner))

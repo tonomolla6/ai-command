@@ -31,10 +31,12 @@ child=subprocess.Popen([sys.executable,'-c','import time;time.sleep(60)'],start_
 (m.state/'child.pid').write_text(str(child.pid))
 mode=sys.argv[1]
 if mode=='failure':child.terminate();child.wait();raise SystemExit(7)
-time.sleep(1.1 if mode in ('periodic','interactive') else 60)
+time.sleep(1.1 if mode in ('periodic','interactive','unknown') else 60)
 entries={m.key(a):{'provider':a['provider'],'account':a['account'],'status':'OK','queried_at':now(),
  'windows':[{'name':'codex/weekly','available_percent':73,'window_minutes':10080}],
  'reset_credits_available':2} for a in m.accounts('codex')}
+if mode=='unknown':
+ for row in entries.values():row.update(status='UNKNOWN',windows=[],reason='Provider returned stale usage')
 m.save_limits(entries)
 child.terminate();child.wait()
 with events.open('a') as f:f.write('end '+str(time.monotonic())+'\n')
@@ -189,6 +191,27 @@ class MonitoringTests(unittest.TestCase):
         self.assertIn('99% disponible',self.screen.text())
         self.assertNotIn(b'PRIVATE-PROVIDER-OUTPUT',self.output)
         self.assertEqual(self.manager.cache()['accounts']['codex:1']['windows'][0]['available_percent'],99)
+        os.write(self.master,b'q');self.proc.wait(timeout=3)
+
+    def test_successful_command_with_unknown_quota_is_not_reported_as_fresh(self):
+        self.start('unknown')
+        self.pump(lambda:'UNKNOWN' in self.screen.text() and 'sin confirmar' in self.screen.text())
+        self.assertNotIn('Actualizado ',self.screen.text())
+        self.assertNotIn('73% disponible',self.screen.text())
+        os.write(self.master,b'q');self.proc.wait(timeout=3)
+
+    def test_external_cache_refresh_updates_open_monitor_without_extra_queries(self):
+        self.start('interactive')
+        self.pump(lambda:'Actualizado ' in self.screen.text())
+        events=self.manager.state/'events.txt'
+        count=events.read_text().count('start ')
+        entries=self.manager.cache()['accounts']
+        for row in entries.values():row['windows'][0]['available_percent']=41
+        self.manager.save_limits(entries)
+        # Curses can leave the unchanged '%' cell in place while replacing
+        # only its digits; the lightweight screen emulator may omit that cell.
+        self.pump(lambda:re.search(r'41%? disponible',self.screen.text()),timeout=3)
+        self.assertEqual(events.read_text().count('start '),count)
         os.write(self.master,b'q');self.proc.wait(timeout=3)
 
     def test_sigterm_restores_terminal_and_retires_detached_query_children(self):

@@ -218,7 +218,8 @@ class Manager:
             os.close(fd)
 
     def cache(self):
-        return read_json(self.state / "limits.json", {"schema": 1, "accounts": {}})
+        from .claude_live import overlay_cache
+        return overlay_cache(self,read_json(self.state / "limits.json", {"schema": 1, "accounts": {}}))
 
     def save_limits(self, entries):
         with self.lock("limits"):

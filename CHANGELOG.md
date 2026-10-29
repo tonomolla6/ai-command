@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.6.4 — 2026-10-29
+
+- Publica el puente de cuotas en vivo de Claude: la statusline oficial de cada sesión registra los límites de 5 h y semanal de sus respuestas normales, aislados por cuenta y caducados al quedar inactiva, sin consultas adicionales. Cubre las cuentas cuyo `/usage` no publica límites.
+- Cuando hay a la vez una observación en vivo y la caché local de Claude Code, gana la más reciente; el monitor indica `sesión @HH:MM` o `caché HH:MM`.
+- Recoge las correcciones de frescura: rechaza cuotas Claude caducadas tras un rate limit y mantiene la caché del monitor al día.
+
 ## 1.6.3 — 2026-10-29
 
 - Algunas cuentas Claude Max 20x reciben `/usage` sin límites aunque funcionan con normalidad. En ese caso `ai` usa la utilización que Claude Code guarda localmente para la misma cuenta, si tiene menos de seis horas, y descarta las ventanas cuyo reset ya ha pasado. El monitor indica la hora de ese dato (`caché HH:MM`); sin caché reciente la cuenta sigue en `UNKNOWN`. No consulta endpoints privados ni gasta turnos.

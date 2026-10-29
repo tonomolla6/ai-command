@@ -13,6 +13,7 @@ import shutil
 import subprocess
 import sys
 import time
+import uuid
 
 from .core import Manager, ManagerError, now, public_text, safe_file, read_json, backup_files
 from .automatic import (refresh_accounts, select_account, quota_score, quota_expiry,
@@ -193,7 +194,11 @@ def launch(manager,args,resume=False,session=None):
               f" · {cwd}"+(f" · resume {session['id']}" if session else ""),flush=True)
         # Same foreground process group/terminal so Ctrl+C/Ctrl+D retain CLI semantics.
         env=manager.env(account);env.pop('ACCOUNT',None);env['AI_MANAGER_BOUND_PROVIDER']=account['provider']
-        if args.provider=='claude':env['CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN']='1'
+        if args.provider=='claude':
+            from .claude_live import ensure_account
+            ensure_account(manager,account)
+            env['CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN']='1'
+            env['AI_MANAGER_CLAUDE_RUN']=uuid.uuid4().hex
         if danger:env['IS_SANDBOX']='1'
         try:result=subprocess.run(command,env=env,cwd=cwd)
         except KeyboardInterrupt:return 130
@@ -276,6 +281,8 @@ def doctor(manager,args):
         print(provider+' auto-approve: '+('ON' if manager.config.get(provider+'_skip_permissions',False) else 'OFF'))
     from .provider_updates import configure_cron
     print('Actualizaciones periódicas CLI: '+('ON · cada 6 horas' if configure_cron(manager,'status') else 'OFF'))
+    live=read_json(manager.state/'claude-live-settings.json')
+    print('Claude cuotas desde sesiones: '+('ON · statusline oficial, sin turnos adicionales' if live.get('enabled') else 'OFF'))
     for provider,label in (("codex","Codex CLI"),("claude","Claude Code")):
         v=version(provider);print(colored(label,provider)+': '+colored('OK' if v!='UNKNOWN' else 'ERROR','ok' if v!='UNKNOWN' else 'empty')+' · '+v)
         if v=="UNKNOWN":problems.append(label+" no disponible")
@@ -395,6 +402,7 @@ def parser():
     a.add_argument('--json',action='store_true')
     a=sub.add_parser('configure',help='Preferencias del gestor')
     for provider in ('codex','claude','agy','opencode'):a.add_argument('--'+provider+'-danger',choices=['on','off'])
+    a.add_argument('--claude-live-usage',choices=['on','off'],help='Recibir cuotas oficiales de las respuestas normales de Claude')
     a=sub.add_parser('native',help='CLI original de AGY/OpenCode con tu política de permisos')
     a.add_argument('provider',choices=list(SINGLE_TOOLS))
     a.add_argument('arguments',nargs=argparse.REMAINDER)
@@ -502,14 +510,20 @@ def main(argv=None):
         if args.command=='configure':
             policies={provider:getattr(args,provider+'_danger') for provider in ('codex','claude','agy','opencode')
                       if getattr(args,provider+'_danger') is not None}
-            if not policies:raise ManagerError('Elige --codex-danger, --claude-danger, --agy-danger o --opencode-danger on/off')
-            with manager.lock('registry',timeout=15):
-                backup_files(manager.home,[manager.config_path],'Change explicit provider permission policies')
-                manager.config=read_json(manager.config_path)
-                for provider,value in policies.items():manager.config[provider+'_skip_permissions']=value=='on'
-                write_json(manager.config_path,manager.config)
+            live=getattr(args,'claude_live_usage',None)
+            if not policies and live is None:raise ManagerError('Elige una preferencia --*-danger o --claude-live-usage on/off')
+            if policies:
+                with manager.lock('registry',timeout=15):
+                    backup_files(manager.home,[manager.config_path],'Change explicit provider permission policies')
+                    manager.config=read_json(manager.config_path)
+                    for provider,value in policies.items():manager.config[provider+'_skip_permissions']=value=='on'
+                    write_json(manager.config_path,manager.config)
             for provider,value in policies.items():
                 print(provider+' auto-approve: '+value+' · aplica a nuevos lanzamientos y resume')
+            if live is not None:
+                from .claude_live import configure
+                count=configure(manager,live=='on')
+                print('Claude cuotas en vivo: '+live+f' · {count} perfiles configurados · sin turnos adicionales')
             return 0
         if args.command=='activity':
             activity=local_activity(manager)
