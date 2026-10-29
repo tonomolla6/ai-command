@@ -96,7 +96,9 @@ def parse_agy_usage(text):
         if len(fields)!=4:continue
         group,label,percentage,date=fields
         match=re.fullmatch(r'(\d+(?:\.\d+)?)%',percentage.strip())
-        if not match or 'remaining' not in label.lower():continue
+        # AGY names separate model buckets without "Remaining" (for example
+        # "Gemini 4 Argon Weekly Limit"); the value is still the remaining share.
+        if not match or 'limit' not in label.lower():continue
         value=float(match[1])
         if not 0<=value<=100:continue
         minutes=10080 if 'weekly' in label.lower() else 300 if 'five hour' in label.lower() else None
