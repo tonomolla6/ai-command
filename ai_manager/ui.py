@@ -63,6 +63,23 @@ def credits_text(credits):
     return ['UNKNOWN']
 
 
+def agy_family_models(models,family,families):
+    """Models covered by one AGY quota family; a family named after a model owns it."""
+    def owner(name):
+        own=[f for f in families if f not in ('Gemini Models','Claude and GPT models') and name.startswith(f)]
+        return max(own,key=len) if own else None
+    names=[]
+    for model in models or []:
+        ids=model.get('ids',[]);name=model.get('name','')
+        claimed=owner(name)
+        if claimed:match=claimed==family
+        elif family=='Gemini Models':match=any(i.startswith('gemini-') for i in ids)
+        elif family=='Claude and GPT models':match=any(i.startswith(('claude-','gpt-')) for i in ids)
+        else:match=False
+        if match:names.append(name)
+    return names
+
+
 def window_name(window):
     name=window['name'].replace('Current session','Sesión / 5h').replace('Current week','Semanal')
     return (name.replace('codex/weekly','Semanal').replace('codex/5h','5h').replace('/weekly',' · semanal')
@@ -146,9 +163,7 @@ def usage_card(account,row,width,reset,age):
         for group in sorted(groups,key=lambda g:(not g.lower().startswith('gemini'),g)):
             members=[w for w in windows if w['name'].rsplit(' · ',1)[0]==group]
             members.sort(key=lambda w:w.get('window_minutes') or 999999)
-            relevant=[m['name'] for m in row['models']
-                      if (group=='Gemini Models' and any(i.startswith('gemini-') for i in m['ids'])) or
-                         (group=='Claude and GPT models' and any(i.startswith(('claude-','gpt-')) for i in m['ids']))]
+            relevant=agy_family_models(row['models'],group,groups)
             if relevant and members:model_headers[id(members[0])]=relevant
             ordered.extend(members)
     for window in ordered:
@@ -156,7 +171,8 @@ def usage_card(account,row,width,reset,age):
             names=', '.join(name.removeprefix('Gemini ').removeprefix('Claude ') for name in model_headers[id(window)])
             body.extend(colored(line,provider) for line in textwrap.wrap(names,width=inner))
         family=window['name'].rsplit(' · ',1)[0]
-        known_family=provider=='agy' and row.get('models') and family in ('Gemini Models','Claude and GPT models')
+        known_family=provider=='agy' and row.get('models') and (
+            family in ('Gemini Models','Claude and GPT models') or agy_family_models(row['models'],family,[family]))
         name=(window['name'].rsplit(' · ',1)[1]+' · compartido') if known_family else window_name(window)
         value=window.get('available_percent')
         is_blocked=window in blocked

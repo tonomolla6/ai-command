@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.6.2 — 2026-10-29
+
+- AGY publica la cuota de Gemini 4 Argon como grupo propio, separado del resto de Gemini. `ai usage` la muestra en su bloque con su ventana y reset, y los modelos Argon dejan de listarse bajo la cuota compartida de Gemini. La próxima recuperación considera Argon como una familia independiente.
+
 ## 1.6.1 — 2026-10-19
 
 - La reparación opcional del onboarding deja de bloquear logins válidos, sesiones y consultas de uso al cambiar la versión de Claude. Una versión desconocida conserva sus preferencias y continúa con el asistente oficial, sin forzar otro OAuth.

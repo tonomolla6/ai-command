@@ -34,6 +34,20 @@ class SingleAccountToolsTests(unittest.TestCase):
         self.assertNotIn('upgrade',json.dumps(credits).lower())
         self.assertIsNone(parse_agy_credits('Remaining credits\tUNKNOWN'))
 
+    def test_agy_keeps_separate_argon_bucket_and_its_models(self):
+        from ai_manager.ui import agy_family_models
+        text=('Gemini Models\tWeekly Limit Remaining\t97%\t2026-10-31T07:15:58Z\n'
+              'Gemini 4 Argon\tGemini 4 Argon Weekly Limit\t0%\t2026-10-31T07:00:26Z')
+        rows=parse_agy_usage(text)
+        self.assertEqual([(r['name'],r['available_percent'],r['window_minutes']) for r in rows],
+                         [('Gemini Models · Semanal',97,10080),('Gemini 4 Argon · Semanal',0,10080)])
+        models=group_agy_models([{'id':'gemini-4-argon-low','name':'Gemini 4 Argon (Low)'},
+                                 {'id':'gemini-3.8-flash-low','name':'Gemini 3.8 Flash (Low)'}])
+        families=['Gemini Models','Gemini 4 Argon']
+        self.assertEqual(agy_family_models(models,'Gemini Models',families),['Gemini 3.8 Flash'])
+        self.assertEqual(agy_family_models(models,'Gemini 4 Argon',families),['Gemini 4 Argon'])
+        self.assertEqual(agy_family_models(models,'Gemini Models',['Gemini Models']),['Gemini 4 Argon','Gemini 3.8 Flash'])
+
     def test_agy_catalog_groups_only_real_effort_variants(self):
         catalog=[{'id':'flash-'+effort,'name':'Gemini 3.8 Flash ('+effort.title()+')'}
                  for effort in ('high','medium','low')]

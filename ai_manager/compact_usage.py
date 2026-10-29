@@ -3,7 +3,7 @@ import math
 import textwrap
 
 from .availability import instant
-from .ui import ANSI, blocked_windows, colored, compact_tokens, credits_text, fit, visible_width, window_name
+from .ui import ANSI, agy_family_models, blocked_windows, colored, compact_tokens, credits_text, fit, visible_width, window_name
 
 
 def _label(window):
@@ -70,14 +70,9 @@ def _window_lines(windows,provider,width,reference):
     return lines
 
 
-def _models(row,family):
-    names=[]
-    for model in row.get('models',[]):
-        ids=model.get('ids',[])
-        if ((family=='Gemini Models' and any(i.startswith('gemini-') for i in ids)) or
-                (family=='Claude and GPT models' and any(i.startswith(('claude-','gpt-')) for i in ids))):
-            names.append(model['name'].removeprefix('Gemini ').removeprefix('Claude '))
-    return ', '.join(names) or family
+def _models(row,family,families):
+    names=agy_family_models(row.get('models',[]),family,families)
+    return ', '.join(n.removeprefix('Gemini ').removeprefix('Claude ') for n in names) or family
 
 
 def compact_account(account,row,width,reference,age):
@@ -96,7 +91,7 @@ def compact_account(account,row,width,reference,age):
         if provider=='agy':
             families=dict.fromkeys(w['name'].rsplit(' · ',1)[0] for w in windows)
             for family in families:
-                body.extend(colored(line,provider) for line in textwrap.wrap(_models(row,family),width=inner))
+                body.extend(colored(line,provider) for line in textwrap.wrap(_models(row,family,families),width=inner))
                 body.extend(_window_lines([w for w in windows if w['name'].rsplit(' · ',1)[0]==family],provider,inner,reference))
         else:body.extend(_window_lines(windows,provider,inner,reference))
     elif not (provider=='opencode' and row.get('activity')):
