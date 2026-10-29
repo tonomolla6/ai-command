@@ -1,2 +1,2 @@
 """Local, manually selected Codex / Claude account manager."""
-__version__ = "1.6.3"
+__version__ = "1.6.4"

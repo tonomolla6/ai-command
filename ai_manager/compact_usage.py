@@ -114,9 +114,9 @@ def compact_account(account,row,width,reference,age):
     activity=row.get('activity')
     if activity:extras.append('429: '+str(activity.get('errors_429',0)))
     queried=instant(row.get('queried_at'))
-    observed=instant(row.get('observed_at'))
+    observed=instant(row.get('observed_at')) if row.get('source_type')=='claude_cache' else None
     if observed:extras.append('caché '+observed.astimezone().strftime('%H:%M'))
-    elif queried:extras.append('@'+queried.astimezone().strftime('%H:%M'))
+    elif queried:extras.append(('sesión ' if row.get('source_type')=='claude_statusline' else '')+'@'+queried.astimezone().strftime('%H:%M'))
     elapsed=age(row)
     if elapsed is not None and elapsed>=120:extras.append('STALE')
     remaining=[]

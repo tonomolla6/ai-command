@@ -2,6 +2,7 @@
 import os
 import sys
 import json
+import uuid
 
 from .core import Manager, ManagerError
 from .providers import executable
@@ -61,6 +62,9 @@ def provider_main(provider, argv=None):
                 else:
                     from .claude_setup import repair_onboarding
                     repair_onboarding(manager,account)
+                    from .claude_live import ensure_account
+                    ensure_account(manager,account)
+                    env['AI_MANAGER_CLAUDE_RUN']=uuid.uuid4().hex
                     argv=shared_claude_arguments(manager,argv)
                     env['CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN']='1'
                     if claude_danger_enabled(manager):
