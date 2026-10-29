@@ -291,6 +291,43 @@ class OfficialUsageTests(unittest.TestCase):
                 self.assertEqual(run.call_count,2)
                 pty.assert_not_called()
 
+    def test_usage_without_limits_uses_recent_local_cache_of_the_same_account(self):
+        import datetime as dt
+        from ai_manager.providers import claude_cached_usage
+        with tempfile.TemporaryDirectory() as tmp:
+            m=Manager(tmp);m.state.mkdir(parents=True);home=Path(tmp)/'.claude-account-4';home.mkdir()
+            account={'provider':'claude','home':str(home)}
+            now=dt.datetime(2026,10,29,10,0,tzinfo=dt.timezone.utc)
+            cache={'fetchedAtMs':int((now-dt.timedelta(hours=2)).timestamp()*1000),'accountUuid':'acct-4',
+                   'utilization':{'five_hour':{'utilization':16,'resets_at':'2026-10-29T12:40:00+00:00'},
+                                  'seven_day':{'utilization':56,'resets_at':'2026-11-03T18:00:00+00:00'}}}
+            write_json(home/'.claude.json',{'oauthAccount':{'accountUuid':'acct-4'},'cachedUsageUtilization':cache})
+            result=claude_cached_usage(m,account,reference=now)
+            self.assertEqual([w['available_percent'] for w in result['windows']],[84,44])
+            self.assertIn('caché local',result['source'])
+            # A window whose reset already passed is not reported as still used.
+            later=dt.datetime(2026,10,29,13,0,tzinfo=dt.timezone.utc)
+            self.assertEqual([w['name'] for w in claude_cached_usage(m,account,reference=later)['windows']],
+                             ['Current week (all models)'])
+            self.assertIsNone(claude_cached_usage(m,account,reference=now+dt.timedelta(hours=5)))
+            cache['accountUuid']='other'
+            write_json(home/'.claude.json',{'oauthAccount':{'accountUuid':'acct-4'},'cachedUsageUtilization':cache})
+            self.assertIsNone(claude_cached_usage(m,account,reference=now))
+            # The official command still runs first and an empty report falls back to the cache.
+            cache['accountUuid']='acct-4';cache['fetchedAtMs']=int(dt.datetime.now(dt.timezone.utc).timestamp()*1000)
+            cache['utilization']['five_hour']['resets_at']=None
+            cache['utilization']['seven_day']['resets_at']=None
+            write_json(home/'.claude.json',{'oauthAccount':{'accountUuid':'acct-4'},'cachedUsageUtilization':cache})
+            finish={'type':'result','subtype':'success','num_turns':0,'total_cost_usd':0,'result':'no limits'}
+            stream=json.dumps({'type':'assistant','usage_report':{'rate_limits':None}})+'\n'+json.dumps(finish)
+            with patch('ai_manager.providers.version',return_value='2.1.284'), \
+                 patch('ai_manager.providers.executable',return_value='/official/claude'), \
+                 patch('ai_manager.providers.subprocess.run') as run:
+                run.return_value.returncode=0;run.return_value.stdout=stream
+                result=claude_usage(m,account,details=True)
+                self.assertEqual([w['available_percent'] for w in result['windows']],[84,44])
+                self.assertIn('observed_at',result)
+
     def test_inline_text_fallback_does_not_include_percentages_in_window_names(self):
         rows=parse_claude('Current session: 0% used\nCurrent week (all models): 100% used · resets Oct 8, 5am (Europe/Madrid)')
         self.assertEqual([r['name'] for r in rows],['Current session','Current week (all models)'])

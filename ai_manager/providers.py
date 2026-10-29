@@ -446,7 +446,44 @@ def claude_usage(manager, account, timeout=25, details=False):
         parsed={'windows':windows,'credits':claude_credits(finish['result']),
                 'source':'claude --print /usage (text, 0 turns)'}
         return parsed if details else windows
+    cached=claude_cached_usage(manager,account)
+    if cached:return cached if details else cached['windows']
     raise ManagerError('Claude /usage: no hay ventanas reconocibles en el comando oficial')
+
+
+CLAUDE_CACHE_MAX_AGE=6*3600
+
+
+def claude_cached_usage(manager,account,reference=None):
+    """Claude Code's own local utilization cache, used when /usage omits limits.
+
+    Some Max 20x accounts get /usage without rate_limits while Claude keeps
+    the utilization it last fetched in its state file. Accept it only for the
+    same account, recent enough, and drop windows whose reset already passed.
+    """
+    path=manager.home/'.claude.json' if account.get('legacy') else Path(account['home'])/'.claude.json'
+    try:state=json.loads(path.read_text())
+    except (OSError,ValueError):return None
+    cache=state.get('cachedUsageUtilization') if isinstance(state,dict) else None
+    owner=(state.get('oauthAccount') or {}).get('accountUuid') if isinstance(state,dict) else None
+    if not isinstance(cache,dict) or not owner or cache.get('accountUuid')!=owner:return None
+    fetched=cache.get('fetchedAtMs')
+    if not isinstance(fetched,(int,float)):return None
+    reference=reference or dt.datetime.now(dt.timezone.utc)
+    fetched_at=dt.datetime.fromtimestamp(fetched/1000,dt.timezone.utc)
+    if not dt.timedelta(0)<=reference-fetched_at<=dt.timedelta(seconds=CLAUDE_CACHE_MAX_AGE):return None
+    windows=[]
+    for key,label,minutes in (('five_hour','Current session',300),('seven_day','Current week (all models)',10080)):
+        item=(cache.get('utilization') or {}).get(key)
+        if not isinstance(item,dict):continue
+        value=available(item.get('utilization'))
+        reset=reset_value(item.get('resets_at')) if item.get('resets_at') else None
+        if value is None or (reset and dt.datetime.fromisoformat(reset)<=reference):continue
+        windows.append({'name':label,'available_percent':value,'reset_at':reset,'window_minutes':minutes})
+    if not windows:return None
+    stamp=fetched_at.astimezone().strftime('%H:%M')
+    return {'windows':windows,'credits':{'enabled':None,'balance':None,'display':'UNKNOWN','source':'caché local de Claude Code'},
+            'source':'caché local de Claude Code '+stamp+' (/usage sin límites)','observed_at':fetched_at.isoformat()}
 
 
 def claude_usage_pty(manager, account, timeout=22, details=False):
@@ -565,6 +602,7 @@ def query_limits(manager, account):
                 for window in windows:
                     if not window.get('reset_at'):window['reset_at']=claude_reset_at(window,entry['queried_at'])
                 entry["source"] = data.get('source','claude /usage (PTY, safe-mode, no tools)')
+                if data.get('observed_at'):entry['observed_at']=data['observed_at']
         if not windows:
             raise ManagerError("No hay límites reconocibles para esta autenticación")
         entry["windows"] = windows
