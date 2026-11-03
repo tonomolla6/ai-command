@@ -70,9 +70,11 @@ def observe(manager,account,payload,instance,reference=None):
                 if date<=reference:continue
                 windows.append({'name':label,'available_percent':round(100-used,1),
                                 'window_minutes':minutes,'reset_at':date.isoformat()})
-        # Both general windows are needed: a positive 5h allowance alone says
-        # nothing about a potentially exhausted overall weekly allowance.
-        signature=hashlib.sha256(json.dumps(windows,sort_keys=True).encode()).hexdigest() if len(windows)==2 else None
+        # The weekly window is required: a positive 5h allowance alone says
+        # nothing about a potentially exhausted overall weekly allowance. Max
+        # 20x plans no longer publish a 5h window, so it stays optional.
+        complete=_complete(windows)
+        signature=hashlib.sha256(json.dumps(windows,sort_keys=True).encode()).hexdigest() if complete else None
         advanced=bool(previous and api_ms>previous.get('api_ms',api_ms))
         if previous and requests is not None and previous.get('requests') is not None:
             advanced=advanced and requests>previous['requests']
@@ -86,7 +88,7 @@ def observe(manager,account,payload,instance,reference=None):
         sessions[session_key]={'api_ms':api_ms,'requests':requests,'quota_signature':signature,'seen_at':reference.isoformat()}
         if len(sessions)>256:
             state['sessions']=dict(sorted(sessions.items(),key=lambda pair:pair[1]['seen_at'])[-256:])
-        updated=bool(previous and len(windows)==2 and (advanced or changed))
+        updated=bool(previous and complete and (advanced or changed))
         if updated:
             state.setdefault('accounts',{})[key]={
                 'provider':'claude','account':account['account'],'email':account['email'],
@@ -94,6 +96,11 @@ def observe(manager,account,payload,instance,reference=None):
         write_json(manager.state/'claude-live.json',state)
     if updated:manager.save_limits({})  # Atomic shared-cache change wakes monitoring.
     return updated
+
+
+def _complete(windows):
+    names=[w.get('name') for w in windows if isinstance(w,dict)]
+    return 'Current week (all models)' in names and len(names)==len(set(names))
 
 
 def merge_entry(manager,account,entry,reference=None,observations=None):
@@ -109,7 +116,7 @@ def merge_entry(manager,account,entry,reference=None,observations=None):
     current=_instant(entry.get('observed_at')) if entry.get('source_type')=='claude_cache' else queried
     if entry.get('status')=='OK' and entry.get('source_type')!='claude_statusline' and current and current>=observed:return entry
     windows=live.get('windows',[])
-    if len(windows)!=2:return entry
+    if not _complete(windows):return entry
     for window in windows:
         reset=_instant(window.get('reset_at'));value=window.get('available_percent')
         if not reset or reset<=reference or not _number(value) or not 0<=value<=100:return entry
