@@ -63,6 +63,17 @@ class LiveUsageTests(unittest.TestCase):
         self.assertEqual(row['source_type'],'claude_statusline')
         self.assertEqual([w['available_percent'] for w in row['windows']],[4,87])
 
+    def test_max_plan_without_five_hour_window_publishes_weekly_only(self):
+        self.baseline()
+        weekly=self.response();del weekly['rate_limits']['five_hour']
+        self.assertTrue(observe(self.m,self.account,weekly,'one-process',self.at))
+        row=merge_entry(self.m,self.account,{},self.at)
+        self.assertEqual([(w['name'],w['available_percent']) for w in row['windows']],
+                         [('Current week (all models)',87)])
+        # A 5h window alone never proves the weekly allowance is available.
+        session=self.response(api_ms=2000);del session['rate_limits']['seven_day']
+        self.assertFalse(observe(self.m,self.account,session,'one-process',self.at))
+
     def test_redraw_and_idle_timer_do_not_renew_observation_age(self):
         self.baseline();observe(self.m,self.account,self.response(),'one-process',self.at)
         later=self.at+dt.timedelta(seconds=119)

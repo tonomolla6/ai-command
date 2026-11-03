@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.6.5 — 2026-11-03
+
+- Claude Max 20x ya no publica la ventana de 5 horas. El puente en vivo de la statusline acepta observaciones con sólo la ventana semanal general (y la de 5 h cuando aparece) en lugar de descartarlas; una ventana de 5 h sin la semanal sigue sin considerarse suficiente.
+
 ## 1.6.4 — 2026-10-29
 
 - Publica el puente de cuotas en vivo de Claude: la statusline oficial de cada sesión registra los límites de 5 h y semanal de sus respuestas normales, aislados por cuenta y caducados al quedar inactiva, sin consultas adicionales. Cubre las cuentas cuyo `/usage` no publica límites.
